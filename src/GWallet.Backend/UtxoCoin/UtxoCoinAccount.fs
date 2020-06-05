@@ -52,6 +52,9 @@ type ArchivedUtxoAccount(currency: Currency, accountFile: FileRepresentation,
 
 module Account =
 
+    //querying for 1 will always return -1 surprisingly...
+    let internal CONFIRMATION_BLOCK_TARGET = 2
+
     let internal GetNetwork (currency: Currency) =
         if not (currency.IsUtxo()) then
             failwith <| SPrintF1 "Assertion failed: currency %A should be UTXO-type" currency
@@ -179,7 +182,7 @@ module Account =
 
     let private CreateTransactionAndCoinsToBeSigned (account: IUtxoAccount)
                                                     (transactionInputs: List<TransactionInputOutpointInfo>)
-                                                    (destination: string)
+                                                    (destination: IDestination)
                                                     (amount: TransferAmount)
                                                         : TransactionBuilder =
         let coins = List.map (ConvertToICoin account) transactionInputs
@@ -189,18 +192,17 @@ module Account =
         |> ignore<TransactionBuilder>
 
         let currency = account.Currency
-        let destAddress = BitcoinAddress.Create(destination, GetNetwork currency)
 
         if amount.BalanceAtTheMomentOfSending <> amount.ValueToSend then
             let moneyAmount = Money(amount.ValueToSend, MoneyUnit.BTC)
-            transactionBuilder.Send(destAddress, moneyAmount)
+            transactionBuilder.Send(destination, moneyAmount)
             |> ignore<TransactionBuilder>
             let originAddress = (account :> IAccount).PublicAddress
             let changeAddress = BitcoinAddress.Create(originAddress, GetNetwork currency)
             transactionBuilder.SetChange changeAddress
             |> ignore<TransactionBuilder>
         else
-            transactionBuilder.SendAll destAddress
+            transactionBuilder.SendAll destination
             |> ignore<TransactionBuilder>
 
         transactionBuilder.OptInRBF <- true
@@ -255,8 +257,8 @@ module Account =
                     return! EstimateFees newTxBuilder feeRate account newInputs tail
         }
 
-    let internal EstimateFee (account: IUtxoAccount) (amount: TransferAmount) (destination: string)
-                                 : Async<TransactionMetadata> = async {
+    let internal EstimateFeeForDestination (account: IUtxoAccount) (amount: TransferAmount) (destination: IDestination)
+                                               : Async<TransactionMetadata> = async {
         let rec addInputsUntilAmount (utxos: List<UnspentTransactionOutputInfo>)
                                       soFarInSatoshis
                                       amount
@@ -316,8 +318,7 @@ module Account =
             let avg = feesFromDifferentServers.Sum() / decimal feesFromDifferentServers.Length
             avg
 
-        //querying for 1 will always return -1 surprisingly...
-        let estimateFeeJob = ElectrumClient.EstimateFee 2
+        let estimateFeeJob = ElectrumClient.EstimateFee CONFIRMATION_BLOCK_TARGET
         let! btcPerKiloByteForFastTrans =
             Server.Query account.Currency (QuerySettings.FeeEstimation averageFee) estimateFeeJob None
 
@@ -348,9 +349,16 @@ module Account =
             return raise <| InsufficientBalanceForFee None
     }
 
+    let internal EstimateFee (account: IUtxoAccount) (amount: TransferAmount) (destination: string)
+                                 : Async<TransactionMetadata> =
+        let currency = (account:>IAccount).Currency
+        let network = GetNetwork currency
+        let destAddress = BitcoinAddress.Create (destination, network)
+        EstimateFeeForDestination account amount destAddress
+
     let private SignTransactionWithPrivateKey (account: IUtxoAccount)
                                               (txMetadata: TransactionMetadata)
-                                              (destination: string)
+                                              (destination: IDestination)
                                               (amount: TransferAmount)
                                               (privateKey: Key) =
 
@@ -358,7 +366,8 @@ module Account =
 
         let finalTransactionBuilder = CreateTransactionAndCoinsToBeSigned account txMetadata.Inputs destination amount
 
-        finalTransactionBuilder.AddKeys privateKey |> ignore
+        finalTransactionBuilder.AddKeys privateKey
+        |> ignore<TransactionBuilder>
         finalTransactionBuilder.SendFees (Money.Satoshis btcMinerFee.EstimatedFeeInSatoshis)
         |> ignore<TransactionBuilder>
 
@@ -381,11 +390,11 @@ module Account =
         | :? SecurityException ->
             raise (InvalidPassword)
 
-    let internal SignTransaction (account: NormalUtxoAccount)
-                                 (txMetadata: TransactionMetadata)
-                                 (destination: string)
-                                 (amount: TransferAmount)
-                                 (password: string) =
+    let internal SignTransactionForDestination (account: NormalUtxoAccount)
+                                               (txMetadata: TransactionMetadata)
+                                               (destination: IDestination)
+                                               (amount: TransferAmount)
+                                               (password: string) =
 
         let privateKey = GetPrivateKey account password
 
@@ -398,10 +407,26 @@ module Account =
         let rawTransaction = signedTransaction.ToHex()
         rawTransaction
 
-    let internal CheckValidPassword (account: NormalAccount) (password: string) =
-        GetPrivateKey account password |> ignore
+    let internal SignTransaction (account: NormalUtxoAccount)
+                                 (txMetadata: TransactionMetadata)
+                                 (destination: string)
+                                 (amount: TransferAmount)
+                                 (password: string) =
+        let currency = (account :> IAccount).Currency
+        let network = GetNetwork currency
+        let destAddress = BitcoinAddress.Create (destination, network)
+        SignTransactionForDestination
+            account
+            txMetadata
+            destAddress
+            amount
+            password
 
-    let private BroadcastRawTransaction currency (rawTx: string): Async<string> =
+    let internal CheckValidPassword (account: NormalAccount) (password: string) =
+        GetPrivateKey account password
+        |> ignore<Key>
+
+    let internal BroadcastRawTransaction currency (rawTx: string): Async<string> =
         let job = ElectrumClient.BroadcastTransaction rawTx
         Server.Query currency QuerySettings.Broadcast job None
 
@@ -410,18 +435,34 @@ module Account =
         // and show the info from the RawTx, using NBitcoin to extract it
         BroadcastRawTransaction currency transaction.RawTransaction
 
+    let internal SendPaymentForDestination (account: NormalUtxoAccount)
+                                           (txMetadata: TransactionMetadata)
+                                           (destination: IDestination)
+                                           (amount: TransferAmount)
+                                           (password: string)
+                                           =
+        let baseAccount = account :> IAccount
+        if baseAccount.PublicAddress.Equals(destination.ToString(), StringComparison.InvariantCultureIgnoreCase) then
+            raise DestinationEqualToOrigin
+
+        let finalTransaction = SignTransactionForDestination account txMetadata destination amount password
+        BroadcastRawTransaction baseAccount.Currency finalTransaction
+
     let internal SendPayment (account: NormalUtxoAccount)
                              (txMetadata: TransactionMetadata)
                              (destination: string)
                              (amount: TransferAmount)
                              (password: string)
-                    =
-        let baseAccount = account :> IAccount
-        if (baseAccount.PublicAddress.Equals(destination, StringComparison.InvariantCultureIgnoreCase)) then
-            raise DestinationEqualToOrigin
-
-        let finalTransaction = SignTransaction account txMetadata destination amount password
-        BroadcastRawTransaction baseAccount.Currency finalTransaction
+                             =
+        let currency = (account:>IAccount).Currency
+        let network = GetNetwork currency
+        let destAddress = BitcoinAddress.Create (destination, network)
+        SendPaymentForDestination
+            account
+            txMetadata
+            destAddress
+            amount
+            password
 
     // TODO: maybe move this func to Backend.Account module, or simply inline it (simple enough)
     let public ExportUnsignedTransactionToJson trans =
@@ -449,8 +490,9 @@ module Account =
         let network = GetNetwork currency
         let amount = TransferAmount(balance, balance, currency)
         let privateKey = Key.Parse(account.GetUnencryptedPrivateKey(), network)
+        let destAddress = BitcoinAddress.Create (destination.PublicAddress, network)
         let signedTrans = SignTransactionWithPrivateKey
-                              account txMetadata destination.PublicAddress amount privateKey
+                              account txMetadata destAddress amount privateKey
         BroadcastRawTransaction currency (signedTrans.ToHex())
 
     let internal Create currency (password: string) (seed: array<byte>): Async<FileRepresentation> =
