@@ -269,6 +269,17 @@ let GetChannelStatuses (accounts: seq<IAccount>): seq<Async<Async<seq<string>>>>
 
 }
 
+let CheckForChannelClosingTx(accounts: seq<IAccount>): seq<Async<Option<string>>> = seq {
+    let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
+    for account in normalUtxoAccounts do
+        let channelStore = ChannelStore account
+        let channelIds = channelStore.ListChannelIds()
+
+        for channelId in channelIds do
+            yield 
+                ChainWatcher.PunishRevokedTx channelId channelStore
+    }
+
 let rec TrySendAmount (account: NormalAccount) transactionMetadata destination amount =
     let password = UserInteraction.AskPassword false
     try
@@ -645,11 +656,13 @@ let rec CheckArchivedAccountsAreEmpty(): bool =
 let rec ProgramMainLoop() =
     let accounts = Account.GetAllActiveAccounts()
     let channelStatusJobs: seq<Async<Async<seq<string>>>> = GetChannelStatuses accounts
+    let channelClosingCheckJobs: seq<Async<Option<string>>> = CheckForChannelClosingTx accounts
+    let channelClosingCheckJob: Async<array<Option<string>>> = Async.Parallel channelClosingCheckJobs
     let channelInfoInteractionsJob: Async<array<Async<seq<string>>>> = Async.Parallel channelStatusJobs
     let displayAccountStatusesJob =
         UserInteraction.DisplayAccountStatuses(WhichAccount.All accounts)
-    let channelInfoInteractions, accountStatusesLines =
-        AsyncExtensions.MixedParallel2 channelInfoInteractionsJob displayAccountStatusesJob
+    let channelInfoInteractions, accountStatusesLines, _ =
+        AsyncExtensions.MixedParallel3 channelInfoInteractionsJob displayAccountStatusesJob channelClosingCheckJob
         |> Async.RunSynchronously
 
     Console.WriteLine ()
