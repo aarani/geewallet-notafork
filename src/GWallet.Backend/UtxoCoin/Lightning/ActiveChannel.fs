@@ -377,23 +377,22 @@ and internal ActiveChannel =
                     return Error <| InvalidRevokeAndAck
                         (brokenChannel, err)
                 | Ok () ->
-                    let channelPrivKeys =
-                        connectedChannel.Channel.ChannelPrivKeys
-                    let commitments = 
-                        self.Commitments()
-                    let network = 
-                        connectedChannel.Network
-                    let account = 
-                        connectedChannel.Account
-                    
-                    let perCommitmentSecret = 
-                        theirRevokeAndAckMsg.PerCommitmentSecret
+                    let channelPrivKeys = connectedChannel.Channel.ChannelPrivKeys
+                    let commitments = self.Commitments()
+                    let network = connectedChannel.Network
+                    let account = connectedChannel.Account
+
+                    let perCommitmentSecret = theirRevokeAndAckMsg.PerCommitmentSecret
 
                     let breachStore = BreachDataStore account
                     let! breachData = 
                             breachStore
                                 .LoadBreachData(connectedChannel.ChannelId)
-                                .InsertRevokedCommitment perCommitmentSecret commitments channelPrivKeys network account
+                                .InsertRevokedCommitment perCommitmentSecret
+                                                         commitments
+                                                         channelPrivKeys
+                                                         network
+                                                         account
                     breachStore.SaveBreachData breachData
 
                     connectedChannelAfterRevokeAndAck.SaveToWallet()

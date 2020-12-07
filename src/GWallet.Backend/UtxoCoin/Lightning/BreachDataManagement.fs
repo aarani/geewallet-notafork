@@ -14,7 +14,6 @@ open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
 
 
-
 type CommitmentBreachData = 
     {
         CommitmentNumber: UInt48
@@ -49,7 +48,11 @@ type ChannelBreachData =
                                             : Async<ChannelBreachData> = async {
 
         let! punishmentTx = 
-            ForceCloseTransaction.createPunishmentTx perCommitmentSecret commitments localChannelPrivKeys network account
+            ForceCloseTransaction.CreatePunishmentTx perCommitmentSecret
+                                                     commitments
+                                                     localChannelPrivKeys
+                                                     network
+                                                     account
 
         let breachData : CommitmentBreachData = 
             { 
@@ -71,7 +74,7 @@ type internal BreachDataStore(account: NormalUtxoAccount) =
         Config.GetConfigDir self.Currency AccountKind.Normal
 
     member self.ChannelDir: DirectoryInfo =
-        let subdirectory = SPrintF1 "%s-lightning" (self.Account :> BaseAccount).AccountFile.Name
+        let subdirectory = SPrintF2 "%s-%s" (self.Account :> BaseAccount).AccountFile.Name Settings.ConfigDirName
         Path.Combine (self.AccountDir.FullName, subdirectory) |> DirectoryInfo
 
     member self.BreachDataFileName (channelId: ChannelIdentifier): string =
@@ -93,8 +96,16 @@ type internal BreachDataStore(account: NormalUtxoAccount) =
                 ChannelBreachData.LightningSerializerSettings
             )
         with
-        | :? FileNotFoundException -> { ChannelBreachData.ChannelId = channelId; ChannelBreachData.CommmitmentBreachData = []  }
-        | :? DirectoryNotFoundException -> { ChannelBreachData.ChannelId = channelId; ChannelBreachData.CommmitmentBreachData = []  }
+        | :? FileNotFoundException ->
+            {
+                ChannelBreachData.ChannelId = channelId
+                ChannelBreachData.CommmitmentBreachData = []
+            }
+        | :? DirectoryNotFoundException ->
+            {
+                ChannelBreachData.ChannelId = channelId
+                ChannelBreachData.CommmitmentBreachData = []
+            }
 
     // For now all lightning incoming messages are handled within a single thread, we don't need a lock here.
     member internal self.SaveBreachData (serializedBreachData: ChannelBreachData) =

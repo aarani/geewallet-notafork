@@ -5,6 +5,7 @@ open System
 open System.Linq
 
 open NBitcoin
+open NBitcoin.BuilderExtensions
 open DotNetLightning.Channel
 open DotNetLightning.Utils
 open DotNetLightning.Crypto
@@ -16,11 +17,10 @@ open GWallet.Backend
 open GWallet.Backend.UtxoCoin
 open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
-open NBitcoin.BuilderExtensions
 
 module public ForceCloseTransaction =
 
-    let internal createPunishmentTx (perCommitmentSecret: PerCommitmentSecret)
+    let internal CreatePunishmentTx (perCommitmentSecret: PerCommitmentSecret)
                                     (commitments: Commitments)
                                     (localChannelPrivKeys: ChannelPrivKeys)
                                     (network: Network)
@@ -38,7 +38,7 @@ module public ForceCloseTransaction =
                 let originAddress = (account :> IAccount).PublicAddress
                 BitcoinAddress.Create(originAddress, network)
 
-            transactionBuilder.SendAll(targetAddress)
+            transactionBuilder.SendAll targetAddress
             |> ignore
 
             let! btcPerKiloByteForFastTrans =

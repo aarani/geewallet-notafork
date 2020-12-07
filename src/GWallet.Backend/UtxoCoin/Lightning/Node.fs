@@ -506,8 +506,8 @@ type Node internal (channelStore: ChannelStore, transportListener: TransportList
 
     member internal self.PunishRevokedTx (channelId: ChannelIdentifier)
                                              : Async<Option<string>> = 
-        ChainWatcher.PunishRevokedTx    channelId
-                                        self.ChannelStore
+        ChainWatcher.PunishRevokedTx channelId
+                                     self.ChannelStore
 
 module public Connection =
     let public Start (channelStore: ChannelStore)
