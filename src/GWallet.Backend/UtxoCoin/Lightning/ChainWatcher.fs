@@ -85,3 +85,15 @@ module public ChainWatcher =
                 return Some <| txId
                 
     }
+    
+    let CheckForRevokedTx(accounts: seq<IAccount>): seq<Async<Option<string>>> = seq {
+        let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
+        for account in normalUtxoAccounts do
+            let channelStore = ChannelStore account
+            let channelIds = channelStore.ListChannelIds()
+        
+            for channelId in channelIds do
+                yield 
+                    PunishRevokedTx channelId channelStore
+        }
+        
