@@ -85,7 +85,7 @@
     <Compile Include="UtxoCoin\Lightning\JsonMarshalling.fs" />
     <Compile Include="UtxoCoin\Lightning\SerializedChannel.fs" />
     <Compile Include="UtxoCoin\Lightning\ChannelManagement.fs" />
-    <Compile Include="UtxoCoin\Lightning\ForceCloseTransactions.fs" />
+    <Compile Include="UtxoCoin\Lightning\ForceCloseTransaction.fs" />
     <Compile Include="UtxoCoin\Lightning\BreachDataManagement.fs" />
     <Compile Include="UtxoCoin\Lightning\Network.fs" />
     <Compile Include="UtxoCoin\Lightning\MsgStream.fs" />
