@@ -1,5 +1,7 @@
 ﻿namespace GWallet.Backend.UtxoCoin.Lightning
 
+open System.Linq
+
 open NBitcoin
 open DotNetLightning.Channel
 open DotNetLightning.Utils
@@ -88,4 +90,4 @@ module public ChainWatcher =
                 yield 
                     PunishRevokedTx channelId channelStore
         }
-        
+
