@@ -14,16 +14,10 @@ open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
 
 
-type CommitmentBreachData = 
-    {
-        CommitmentNumber: UInt48
-        PenaltyTx: string
-    }
-
 type ChannelBreachData = 
     {
         ChannelId: ChannelIdentifier
-        CommmitmentBreachData: List<CommitmentBreachData>
+        PenaltyTxs: List<string>
     }
     
     static member LightningSerializerSettings =
@@ -33,11 +27,11 @@ type ChannelBreachData =
         settings.Converters.Add signatureConverter
         settings
 
-    member internal self.BreachDataExists(commitmentNumber: CommitmentNumber) : bool =
-        (self.CommmitmentBreachData |> List.tryFind (fun comm -> comm.CommitmentNumber = commitmentNumber.Index())).IsSome
+    member internal self.PenaltyTxExists(commitmentNumber: CommitmentNumber) : bool =
+        (self.PenaltyTxs |> List.tryItem(int32((UInt48.MaxValue - commitmentNumber.Index()).UInt64))).IsSome
 
-    member internal self.GetBreachData(commitmentNumber: CommitmentNumber) : Option<CommitmentBreachData> =
-        self.CommmitmentBreachData |> List.tryFind (fun comm -> comm.CommitmentNumber = commitmentNumber.Index())
+    member internal self.GetPenaltyTx(commitmentNumber: CommitmentNumber) : Option<string> =
+        self.PenaltyTxs |> List.tryItem(int32((UInt48.MaxValue - commitmentNumber.Index()).UInt64)) //overflow?
 
     member internal self.InsertRevokedCommitment 
                                         (perCommitmentSecret: PerCommitmentSecret)
@@ -46,6 +40,8 @@ type ChannelBreachData =
                                         (network: Network)
                                         (account: NormalUtxoAccount) 
                                             : Async<ChannelBreachData> = async {
+        if self.PenaltyTxs.Length <> int32((UInt48.MaxValue - commitments.RemoteCommit.Index.Index()).UInt64) then
+            failwith "Unexpected penalty trsansaction list length"
 
         let! punishmentTx = 
             ForceCloseTransaction.CreatePunishmentTx perCommitmentSecret
@@ -54,13 +50,8 @@ type ChannelBreachData =
                                                      network
                                                      account
 
-        let breachData : CommitmentBreachData = 
-            { 
-                PenaltyTx = punishmentTx.ToHex()
-                CommitmentNumber = commitments.RemoteCommit.Index.Index()
-            }
 
-        return { self with CommmitmentBreachData = self.CommmitmentBreachData @ [ breachData ] }
+        return { self with PenaltyTxs = self.PenaltyTxs @ [ punishmentTx.ToHex() ] }
     }
 
 type internal BreachDataStore(account: NormalUtxoAccount) =
@@ -99,7 +90,7 @@ type internal BreachDataStore(account: NormalUtxoAccount) =
         | :? FileNotFoundException | :? DirectoryNotFoundException ->
             {
                 ChannelBreachData.ChannelId = channelId
-                ChannelBreachData.CommmitmentBreachData = []
+                ChannelBreachData.PenaltyTxs = []
             }
 
     // For now all lightning incoming messages are handled within a single thread, we don't need a lock here.
