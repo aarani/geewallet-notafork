@@ -1,17 +1,9 @@
 ﻿namespace GWallet.Backend.UtxoCoin.Lightning
 
-open System.IO
-open System
-open System.Linq
-
 open NBitcoin
-open NBitcoin.BuilderExtensions
 open DotNetLightning.Channel
 open DotNetLightning.Utils
 open DotNetLightning.Crypto
-open DotNetLightning.Transactions
-open DotNetLightning.Transactions.Transactions
-open Newtonsoft.Json
 
 open GWallet.Backend
 open GWallet.Backend.UtxoCoin
