@@ -67,7 +67,7 @@ module public ChainWatcher =
                     remoteChannelPubKeys.PaymentBasepoint
 
             //TODO: or we could just search based on CommitmentTxHash
-            let breachDataOpt = (BreachDataStore(channelStore.Account))
+            let breachDataOpt = (BreachDataStore channelStore.Account)
                                    .LoadBreachData(channelId)
                                    .GetBreachData(commitmentNumber)
 

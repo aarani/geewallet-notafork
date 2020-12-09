@@ -96,12 +96,7 @@ type internal BreachDataStore(account: NormalUtxoAccount) =
                 ChannelBreachData.LightningSerializerSettings
             )
         with
-        | :? FileNotFoundException ->
-            {
-                ChannelBreachData.ChannelId = channelId
-                ChannelBreachData.CommmitmentBreachData = []
-            }
-        | :? DirectoryNotFoundException ->
+        | :? FileNotFoundException | :? DirectoryNotFoundException ->
             {
                 ChannelBreachData.ChannelId = channelId
                 ChannelBreachData.CommmitmentBreachData = []
