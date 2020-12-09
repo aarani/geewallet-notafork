@@ -1228,7 +1228,7 @@ type LN() =
             failwith "incorrect balance after receiving payment 1"
 
         let rec checkForClosingTx() = async {
-            let! txIdOpt = Lightning.Network.PunishRevokedTx walletInstance.Node channelId
+            let! txIdOpt = Lightning.Network.CheckForChannelFraudAndSendRevocationTx walletInstance.Node channelId
             match txIdOpt with
             | None ->
                 do! Async.Sleep 500

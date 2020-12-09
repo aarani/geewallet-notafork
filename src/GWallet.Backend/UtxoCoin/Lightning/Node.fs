@@ -504,8 +504,8 @@ type Node internal (channelStore: ChannelStore, transportListener: TransportList
             return Some transactionString
     }
 
-    member internal self.PunishRevokedTx (channelId: ChannelIdentifier)
-                                             : Async<Option<string>> = 
+    member internal self.CheckForChannelFraudAndSendRevocationTx (channelId: ChannelIdentifier)
+                                                                     : Async<Option<string>> =
         ChainWatcher.CheckForChannelFraudAndSendRevocationTx channelId
                                                              self.ChannelStore
 
