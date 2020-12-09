@@ -15,9 +15,9 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 
 module public ChainWatcher =
 
-    let PunishRevokedTx (channelId: ChannelIdentifier)
-                        (channelStore: ChannelStore)
-                            : Async<Option<string>> = async { 
+    let internal CheckForChannelFraudAndSendRevocationTx (channelId: ChannelIdentifier)
+                                                         (channelStore: ChannelStore)
+                                                             : Async<Option<string>> = async {
         let serializedChannel = channelStore.LoadChannel channelId
         let currency = (channelStore.Account :> IAccount).Currency
         let commitments = ChannelSerialization.Commitments serializedChannel
@@ -79,15 +79,16 @@ module public ChainWatcher =
                 return Some <| txId
                 
     }
-    
-    let CheckForRevokedTx(accounts: seq<IAccount>): seq<Async<Option<string>>> = seq {
-        let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
-        for account in normalUtxoAccounts do
-            let channelStore = ChannelStore account
-            let channelIds = channelStore.ListChannelIds()
-        
-            for channelId in channelIds do
-                yield 
-                    PunishRevokedTx channelId channelStore
+
+    let CheckForChannelFraudsAndSendRevocationTx (accounts: seq<UtxoCoin.NormalUtxoAccount>)
+                                                     : seq<Async<Option<string>>> =
+        seq {
+            for account in accounts do
+                let channelStore = ChannelStore account
+                let channelIds = channelStore.ListChannelIds()
+
+                for channelId in channelIds do
+                    yield
+                        CheckForChannelFraudAndSendRevocationTx channelId channelStore
         }
 
