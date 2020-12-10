@@ -67,15 +67,15 @@ module public ChainWatcher =
                     remoteChannelPubKeys.PaymentBasepoint
 
             //TODO: or we could just search based on CommitmentTxHash
-            let penaltyTxOpt = (BreachDataStore channelStore.Account)
+            let breachDataOpt = (BreachDataStore channelStore.Account)
                                    .LoadBreachData(channelId)
-                                   .GetPenaltyTx(commitmentNumber)
+                                   .GetBreachData(commitmentNumber)
 
-            match penaltyTxOpt with
+            match breachDataOpt with
             | None -> return None
-            | Some penaltyTx ->
+            | Some breachData ->
                 let! txId = 
-                    UtxoCoin.Account.BroadcastRawTransaction currency penaltyTx
+                    UtxoCoin.Account.BroadcastRawTransaction currency breachData.PenaltyTx
                 return Some <| txId
                 
     }
