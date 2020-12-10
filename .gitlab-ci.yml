@@ -52,26 +52,26 @@ stockmono_test_integration:
     - make
     - make update-servers
 
-newmono_build:
-  image: ubuntu:20.04
-  stage: build
-  artifacts:
-    paths:
-      - bin/*.zip
-    expire_in: 50days
-  script:
-    - ./scripts/install_mono_from_microsoft_deb_packages.sh
+#newmono_build:
+#  image: ubuntu:20.04
+#  stage: build
+#  artifacts:
+#    paths:
+#      - bin/*.zip
+#    expire_in: 50days
+#  script:
+#    - ./scripts/install_mono_from_microsoft_deb_packages.sh
 
-    - ./configure.sh
-    - make sanitycheck
-    - make strict
-    - make
-    - make install
+#    - ./configure.sh
+#    - make sanitycheck
+#    - make strict
+#    - make
+#    - make install
     # so that we log the version of nuget for when it works
-    - make nuget
+#    - make nuget
 
-    - apt-get install -y zip
-    - make zip
+#    - apt-get install -y zip
+#    - make zip
 
 newmono_test_unit:
   image: ubuntu:20.04
