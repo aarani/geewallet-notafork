@@ -22,7 +22,7 @@ type CommitmentBreachData =
 type ChannelBreachData = 
     {
         ChannelId: ChannelIdentifier
-        CommmitmentBreachData: Map<CommitmentNumber,CommitmentBreachData>
+        CommmitmentBreachData: Map<UInt48,CommitmentBreachData>
     }
     
     static member LightningSerializerSettings =
@@ -33,10 +33,10 @@ type ChannelBreachData =
         settings
 
     member internal self.BreachDataExists(commitmentNumber: CommitmentNumber) : bool =
-        self.CommmitmentBreachData |> Map.containsKey (commitmentNumber)
+        self.CommmitmentBreachData |> Map.containsKey (commitmentNumber.Index())
 
     member internal self.GetBreachData(commitmentNumber: CommitmentNumber) : Option<CommitmentBreachData> =
-        self.CommmitmentBreachData |> Map.tryFind (commitmentNumber)
+        self.CommmitmentBreachData |> Map.tryFind (commitmentNumber.Index())
 
     member internal self.InsertRevokedCommitment 
                                         (perCommitmentSecret: PerCommitmentSecret)
@@ -58,7 +58,7 @@ type ChannelBreachData =
                 PenaltyTx = punishmentTx.ToHex()
             }
 
-        return { self with CommmitmentBreachData = self.CommmitmentBreachData.Add(commitments.RemoteCommit.Index, breachData) }
+        return { self with CommmitmentBreachData = self.CommmitmentBreachData.Add(commitments.RemoteCommit.Index.Index(), breachData) }
     }
 
 type internal BreachDataStore(account: NormalUtxoAccount) =
