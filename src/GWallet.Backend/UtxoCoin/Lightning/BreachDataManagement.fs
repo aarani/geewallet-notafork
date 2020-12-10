@@ -16,14 +16,13 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 
 type CommitmentBreachData = 
     {
-        CommitmentNumber: UInt48
         PenaltyTx: string
     }
 
 type ChannelBreachData = 
     {
         ChannelId: ChannelIdentifier
-        CommmitmentBreachData: List<CommitmentBreachData>
+        CommmitmentBreachData: Map<CommitmentNumber,CommitmentBreachData>
     }
     
     static member LightningSerializerSettings =
@@ -34,10 +33,10 @@ type ChannelBreachData =
         settings
 
     member internal self.BreachDataExists(commitmentNumber: CommitmentNumber) : bool =
-        (self.CommmitmentBreachData |> List.tryFind (fun comm -> comm.CommitmentNumber = commitmentNumber.Index())).IsSome
+        self.CommmitmentBreachData |> Map.containsKey (commitmentNumber)
 
     member internal self.GetBreachData(commitmentNumber: CommitmentNumber) : Option<CommitmentBreachData> =
-        self.CommmitmentBreachData |> List.tryFind (fun comm -> comm.CommitmentNumber = commitmentNumber.Index())
+        self.CommmitmentBreachData |> Map.tryFind (commitmentNumber)
 
     member internal self.InsertRevokedCommitment 
                                         (perCommitmentSecret: PerCommitmentSecret)
@@ -57,10 +56,9 @@ type ChannelBreachData =
         let breachData : CommitmentBreachData = 
             { 
                 PenaltyTx = punishmentTx.ToHex()
-                CommitmentNumber = commitments.RemoteCommit.Index.Index()
             }
 
-        return { self with CommmitmentBreachData = self.CommmitmentBreachData @ [ breachData ] }
+        return { self with CommmitmentBreachData = self.CommmitmentBreachData.Add(commitments.RemoteCommit.Index, breachData) }
     }
 
 type internal BreachDataStore(account: NormalUtxoAccount) =
@@ -99,7 +97,7 @@ type internal BreachDataStore(account: NormalUtxoAccount) =
         | :? FileNotFoundException | :? DirectoryNotFoundException ->
             {
                 ChannelBreachData.ChannelId = channelId
-                ChannelBreachData.CommmitmentBreachData = []
+                ChannelBreachData.CommmitmentBreachData = Map.empty
             }
 
     // For now all lightning incoming messages are handled within a single thread, we don't need a lock here.
