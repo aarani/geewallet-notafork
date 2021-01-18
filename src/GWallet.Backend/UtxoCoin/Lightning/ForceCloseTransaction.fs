@@ -25,6 +25,7 @@ module public ForceCloseTransaction =
                                     (localChannelPrivKeys: ChannelPrivKeys)
                                     (network: Network)
                                     (account: NormalUtxoAccount)
+                                    (rewardAddressOpt: Option<string>)
                                         : Async<Transaction> =
         async {
             let transactionBuilder =
@@ -38,8 +39,34 @@ module public ForceCloseTransaction =
                 let originAddress = (account :> IAccount).PublicAddress
                 BitcoinAddress.Create(originAddress, network)
 
-            transactionBuilder.SendAll targetAddress
-            |> ignore
+            let rewardAddressOpt = 
+                match rewardAddressOpt with 
+                | Some rewardAddress -> 
+                    BitcoinAddress.Create(rewardAddress, network) |> Some
+                | None -> None
+
+            let reward =
+                //TODO: MOVE Hardcoded value
+                let toLocal =
+                    commitments
+                        .RemoteCommitAmount()
+                        .ToLocal.ToDecimal(MoneyUnit.Satoshi)
+
+                let toRemote =
+                    commitments
+                        .RemoteCommitAmount()
+                        .ToRemote.ToDecimal(MoneyUnit.Satoshi)
+
+                (toLocal + toRemote) * (decimal 0.001)
+                |> Money.Satoshis
+
+
+            match rewardAddressOpt with 
+            | Some rewardAddress ->
+                transactionBuilder.Send (rewardAddress, reward) |> ignore
+                transactionBuilder.SendAllRemaining targetAddress |> ignore
+            | None -> 
+                transactionBuilder.SendAll targetAddress |> ignore
 
             let! btcPerKiloByteForFastTrans =
                 let averageFee (feesFromDifferentServers: List<decimal>): decimal =
