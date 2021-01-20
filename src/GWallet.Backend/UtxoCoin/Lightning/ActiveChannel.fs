@@ -11,6 +11,7 @@ open ResultUtils.Portability
 open GWallet.Backend
 open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
+open GWallet.Backend.UtxoCoin.Lightning.Watcher
 
 type internal LockFundingError =
     | FundingNotConfirmed of FundedChannel * BlockHeightOffset32
@@ -428,6 +429,13 @@ and internal ActiveChannel =
                                                          network
                                                          account
                     breachStore.SaveBreachData breachData
+                    
+                    do! TowerClient.Default.CreateAndSendPunishmentTx perCommitmentSecret
+                                                                      commitments
+                                                                      channelPrivKeys
+                                                                      network
+                                                                      account
+                                                                      true
 
                     connectedChannelAfterRevokeAndAck.SaveToWallet()
                     let activeChannel = { ConnectedChannel = connectedChannelAfterRevokeAndAck }
