@@ -88,7 +88,9 @@ module public ChainWatcher =
                 let channelIds = channelStore.ListChannelIds()
 
                 for channelId in channelIds do
-                    yield
-                        CheckForChannelFraudAndSendRevocationTx channelId channelStore
+                    let channelInfo = channelStore.ChannelInfo channelId
+                    if channelInfo.Status <> ChannelStatus.Closed then
+                        yield
+                            CheckForChannelFraudAndSendRevocationTx channelId channelStore
         }
 
