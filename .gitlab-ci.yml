@@ -20,7 +20,6 @@ stockmono_test_unit:
     - apt-get install -y nunit-console
     - ./configure.sh
     - make
-    - make check
     - make check-end-to-end
 
 newmono_test_unit:
@@ -32,4 +31,4 @@ newmono_test_unit:
 
     - apt install -y nunit-console
 
-    - time (./configure.sh && make && make check && make check-end-to-end)
+    - time (./configure.sh && make && make check-end-to-end)
