@@ -174,7 +174,7 @@ type ChannelStore(account: NormalUtxoAccount) =
             UnwrapOption
                 serializedChannel.ChanState.Commitments
                 "A channel can only end up in the wallet if it has commitments."
-        commitments.LocalParams.ToSelfDelay
+        commitments.LocalParams.ToSelfDelay.Value
 
     member self.GetCommitmentTx (channelId: ChannelIdentifier): string =
         let commitments =
