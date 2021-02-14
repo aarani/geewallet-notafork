@@ -41,4 +41,5 @@ module public Network =
     let public CheckForChannelFraudAndSendRevocationTx (lightningNode: Node) =
         lightningNode.CheckForChannelFraudAndSendRevocationTx
     let public CheckForClosingTx (lightningNode: Node) = lightningNode.CheckForClosingTx
+    let public CheckForClosingTxFunder (lightningNode: Node) = lightningNode.CheckForClosingTxFunder
     let public EndPoint (lightningNode: Node) = lightningNode.EndPoint

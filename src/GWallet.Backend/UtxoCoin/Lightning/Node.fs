@@ -504,6 +504,88 @@ type Node internal (channelStore: ChannelStore, transportListener: TransportList
             return Some transactionString
     }
 
+    member internal self.CheckForClosingTxFunder (channelId: ChannelIdentifier)
+                                                    : Async<Option<string>> = async {
+        let serializedChannel = self.ChannelStore.LoadChannel channelId
+        let currency = (self.Account :> IAccount).Currency
+        let commitments = ChannelSerialization.Commitments serializedChannel
+        let fundingScriptCoin = commitments.FundingScriptCoin
+        let fundingDestination: TxDestination = fundingScriptCoin.ScriptPubKey.GetDestination()
+        let network = UtxoCoin.Account.GetNetwork currency
+        let fundingAddress: BitcoinAddress = fundingDestination.GetAddress network
+        let fundingAddressString: string = fundingAddress.ToString()
+        let scriptHash =
+            Account.GetElectrumScriptHashFromPublicAddress
+                currency
+                fundingAddressString
+        let! historyList =
+            Server.Query currency
+                         (QuerySettings.Default ServerSelectionMode.Fast)
+                         (ElectrumClient.GetBlockchainScriptHashHistory scriptHash)
+                         None
+        
+        let GetTransaction (spendingTxInfo) = async {
+            let spendingTxId = spendingTxInfo.TxHash
+            let! spendingTxString =
+                Server.Query
+                    currency
+                    (QuerySettings.Default ServerSelectionMode.Fast)
+                    (ElectrumClient.GetBlockchainTransaction spendingTxId)
+                    None
+            let spendingTx = Transaction.Parse(spendingTxString, network)
+            let transactionBuilderOpt =
+                let channelPrivKeys =
+                    let channelIndex = serializedChannel.ChannelIndex
+                    let nodeMasterPrivKey = self.TransportListener.NodeMasterPrivKey
+                    nodeMasterPrivKey.ChannelPrivKeys channelIndex
+                RemoteForceClose.getFundsFromForceClosingTransaction
+                    commitments
+                    channelPrivKeys
+                    network
+                    spendingTx
+            let transactionBuilder =
+                UnwrapOption
+                    transactionBuilderOpt
+                    "Failed to interpret tx which spends the channel funds. Channel funds have been lost!"
+
+            let targetAddress =
+                let originAddress = (self.Account :> IAccount).PublicAddress
+                BitcoinAddress.Create(originAddress, Account.GetNetwork currency)
+            transactionBuilder.SendAll targetAddress |> ignore
+
+            let! btcPerKiloByteForFastTrans =
+                let averageFee (feesFromDifferentServers: List<decimal>): decimal =
+                    feesFromDifferentServers.Sum() / decimal feesFromDifferentServers.Length
+                let estimateFeeJob = ElectrumClient.EstimateFee Account.CONFIRMATION_BLOCK_TARGET
+                Server.Query
+                    currency
+                    (QuerySettings.FeeEstimation averageFee)
+                    estimateFeeJob
+                    None
+            let fee =
+                let feeRate = Money(btcPerKiloByteForFastTrans, MoneyUnit.BTC) |> FeeRate
+                transactionBuilder.EstimateFees feeRate
+            transactionBuilder.SendFees fee |> ignore
+
+            let transaction = transactionBuilder.BuildTransaction true
+            let transactionString = transaction.ToHex()
+            
+            return Some transactionString
+        }
+        let tryGetTransaction(spendingTxInfo: BlockchainScriptHashHistoryInnerResult) : Option<string>=
+            try 
+                let res = GetTransaction(spendingTxInfo) |> Async.RunSynchronously
+                res
+            with _ ->
+                let st : Option<string> = None
+                st
+            
+
+        return 
+            historyList 
+            |> List.tryPick(tryGetTransaction) 
+    }
+
     member internal self.CheckForChannelFraudAndSendRevocationTx (channelId: ChannelIdentifier)
                                                                      : Async<Option<string>> =
         ChainWatcher.CheckForChannelFraudAndSendRevocationTx channelId

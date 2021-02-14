@@ -1408,7 +1408,7 @@ type LN() =
 
         // attempt to broadcast tx which spends the theft tx
         let rec checkForClosingTx() = async {
-            let! txStringOpt = Lightning.Network.CheckForClosingTx walletInstance.Node channelId
+            let! txStringOpt = Lightning.Network.CheckForClosingTxFunder walletInstance.Node channelId
             match txStringOpt with
             | None ->
                 do! Async.Sleep 500
