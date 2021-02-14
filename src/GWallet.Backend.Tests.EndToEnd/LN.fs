@@ -1369,6 +1369,7 @@ type LN() =
             failwith "incorrect balance after payment 0"
 
         let commitmentTx = walletInstance.ChannelStore.GetCommitmentTx channelId
+        let toSelfDelay = walletInstance.ChannelStore.GetToSelfDelay channelId
 
         let! sendMonoHopPayment1Res =
             let transferAmount =
@@ -1406,6 +1407,12 @@ type LN() =
         let! accountBalanceBeforeSpendingTheftTx =
             walletInstance.GetBalance()
 
+        // give the fundee plenty of time to broadcast the penalty tx
+        do! Async.Sleep 10000
+
+        // mine enough blocks to lock-time to get satisfied
+        bitcoind.GenerateBlocks (BlockHeightOffset32  (toSelfDelay.Value |> uint32)) lndAddress
+
         // attempt to broadcast tx which spends the theft tx
         let rec checkForClosingTx() = async {
             let! txStringOpt = Lightning.Network.CheckForClosingTxFunder walletInstance.Node channelId
@@ -1425,9 +1432,6 @@ type LN() =
                 return ()
         }
         do! checkForClosingTx()
-
-        // give the fundee plenty of time to broadcast the penalty tx
-        do! Async.Sleep 10000
 
         // mine enough blocks to confirm whichever tx spends the theft tx
         bitcoind.GenerateBlocks (BlockHeightOffset32 minimumDepth) lndAddress
