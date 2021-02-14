@@ -168,7 +168,7 @@ type ChannelStore(account: NormalUtxoAccount) =
                 yield channelInfo
     }
 
-    member self.GetToSelfDelay (channelId: ChannelIdentifier): BlockHeightOffset16 =
+    member self.GetToSelfDelay (channelId: ChannelIdentifier): uint16 =
         let commitments =
             let serializedChannel = self.LoadChannel channelId
             UnwrapOption

@@ -1411,7 +1411,7 @@ type LN() =
         do! Async.Sleep 10000
 
         // mine enough blocks to lock-time to get satisfied
-        bitcoind.GenerateBlocks (BlockHeightOffset32  (toSelfDelay.Value |> uint32)) lndAddress
+        bitcoind.GenerateBlocks (BlockHeightOffset32  (toSelfDelay |> uint32)) lndAddress
 
         // attempt to broadcast tx which spends the theft tx
         let rec checkForClosingTx() = async {
