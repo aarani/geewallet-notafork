@@ -5,24 +5,7 @@ before_script:
   - apt-get install -y curl
 
 stages:
-  - build
   - unit_tests
-  - integration_tests
-  - package
-
-stockmono_build:
-  image: ubuntu:20.04
-  stage: build
-  script:
-    # https://askubuntu.com/a/1013396
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y mono-complete mono-xbuild fsharp
-    - mono --version
-
-    - ./configure.sh
-    - make sanitycheck
-    - make strict
-    - make
-    - make install
 
 stockmono_test_unit:
   image: ubuntu:20.04
@@ -40,39 +23,6 @@ stockmono_test_unit:
     - make check
     - make check-end-to-end
 
-stockmono_test_integration:
-  image: ubuntu:20.04
-  stage: integration_tests
-  script:
-    # https://askubuntu.com/a/1013396
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y mono-complete mono-xbuild fsharp
-    - mono --version
-
-    - ./configure.sh
-    - make
-    - make update-servers
-
-newmono_build:
-  image: ubuntu:20.04
-  stage: build
-  artifacts:
-    paths:
-      - bin/*.zip
-    expire_in: 50days
-  script:
-    - ./scripts/install_mono_from_microsoft_deb_packages.sh
-
-    - ./configure.sh
-    - make sanitycheck
-    - make strict
-    - make
-    - make install
-    # so that we log the version of nuget for when it works
-    - make nuget
-
-    - apt-get install -y zip
-    - make zip
-
 newmono_test_unit:
   image: ubuntu:20.04
   stage: unit_tests
@@ -83,37 +33,3 @@ newmono_test_unit:
     - apt install -y nunit-console
 
     - time (./configure.sh && make && make check && make check-end-to-end)
-
-newmono_test_integration:
-  image: ubuntu:20.04
-  stage: integration_tests
-  script:
-    - ./scripts/install_mono_from_microsoft_deb_packages.sh
-
-    - ./configure.sh &&
-      make &&
-      make update-servers
-
-# snap package generation is not working with GitLabCI; TODO: report bug
-#stockoldmono_package:
-#  image: ubuntu:18.04
-#  stage: package
-#  script:
-#    - ./scripts/install_mono_from_microsoft_deb_packages.sh
-#
-#    - apt install -y sudo
-#    - ./scripts/install_snapcraft_dockerless.sh
-#    # finish installation of snapcraft
-#    - export SNAP=/snap/snapcraft/current
-#    - export SNAP_NAME=snapcraft
-#    - export SNAP_ARCH=amd64
-#    - export PATH="/snap/bin:$PATH"
-#
-#    - /snap/bin/snapcraft --version
-#
-#    - ./scripts/snap_build.sh
-#
-#  artifacts:
-#    paths:
-#      - gwallet*.snap
-#    expire_in: 50days
