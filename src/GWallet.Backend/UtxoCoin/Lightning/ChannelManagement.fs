@@ -152,6 +152,13 @@ type ChannelStore(account: NormalUtxoAccount) =
         let serializedChannel = self.LoadChannel channelId
         ChannelInfo.FromSerializedChannel serializedChannel self.Currency
 
+    member self.GetFundingAddress (channelId: ChannelIdentifier): BitcoinAddress =
+        let serializedChannel = self.LoadChannel channelId
+        let commitments = ChannelSerialization.Commitments serializedChannel
+        let fundingDestination: TxDestination = commitments.FundingScriptCoin.ScriptPubKey.GetDestination()
+        let network = serializedChannel.Network
+        fundingDestination.GetAddress network
+
     member self.ListChannelInfos(): seq<ChannelInfo> = seq {
         for channelId in self.ListChannelIds() do
             let channelInfo = self.ChannelInfo channelId
