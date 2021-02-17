@@ -68,25 +68,51 @@ module Account =
                         yield GetAccountFromFile accountFile currency kind
         }
 
+    let internal GetLightningNodeSecret (password: string)
+                                        (accountFile: FileRepresentation)
+                                        (currency: Currency)
+                                            : string =
+        let utxoAccount =
+            UtxoCoin.Account.GetAccountFromFile
+                accountFile
+                currency
+                AccountKind.Normal
+        let utxoAccountPrivateKey =
+            UtxoCoin.Account.GetPrivateKey (utxoAccount :?> NormalAccount) password
+        let nodeSecret = 
+            UtxoCoin.Lightning.Node.AccountPrivateKeyToNodeSecret
+                utxoAccountPrivateKey
+        nodeSecret.ToString()
 
-    let GetNormalAccountsPairingInfoForWatchWallet(): Option<WatchWalletInfo> =
+    let GetNormalAccountsPairingInfoForWatchWallet (passwordForLightningNodeSecret: string)
+                                                       : Option<WatchWalletInfo> =
         let allCurrencies = Currency.GetAll()
 
-        let utxoCurrencyAccountFiles =
-            Config.GetAccountFiles (allCurrencies.Where(fun currency -> currency.IsUtxo())) AccountKind.Normal
-        let etherCurrencyAccountFiles =
-            Config.GetAccountFiles (allCurrencies.Where(fun currency -> currency.IsEtherBased())) AccountKind.Normal
-        if (not (utxoCurrencyAccountFiles.Any())) || (not (etherCurrencyAccountFiles.Any())) then
-            None
-        else
-            let firstUtxoAccountFile = utxoCurrencyAccountFiles.First()
+        let utxoCurrencyFile =
+            Config.GetAnyAccountFileWithCurrency
+                (allCurrencies.Where(fun currency -> currency.IsUtxo()))
+                AccountKind.Normal
+
+        let etherCurrencyFile =
+            Config.GetAnyAccountFileWithCurrency
+                (allCurrencies.Where(fun currency -> currency.IsEtherBased()))
+                AccountKind.Normal
+
+        match (utxoCurrencyFile, etherCurrencyFile) with
+        | (Some (firstUtxoAccountFile, utxoCurrency), Some (firstEtherAccountFile, _etherCurrency)) ->
             let utxoCoinPublicKey = UtxoCoin.Account.GetPublicKeyFromNormalAccountFile firstUtxoAccountFile
-            let firstEtherAccountFile = etherCurrencyAccountFiles.First()
             let etherPublicAddress = Ether.Account.GetPublicAddressFromNormalAccountFile firstEtherAccountFile
+            let lightningNodeSecret =
+                GetLightningNodeSecret
+                    passwordForLightningNodeSecret
+                    firstUtxoAccountFile
+                    utxoCurrency
             Some {
                 UtxoCoinPublicKey = utxoCoinPublicKey.ToString()
                 EtherPublicAddress = etherPublicAddress
+                LightningNodeSecret = lightningNodeSecret
             }
+        | _ -> None
 
     let GetArchivedAccountsWithPositiveBalance (cancelSourceOption: Option<CustomCancelSource>)
                                                    : Async<seq<ArchivedAccount*decimal>> =

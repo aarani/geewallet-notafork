@@ -509,7 +509,8 @@ let ArchiveAccount() =
                   (account.GetType().FullName)
 
 let PairToWatchWallet() =
-    match Account.GetNormalAccountsPairingInfoForWatchWallet() with
+    let password = UserInteraction.AskPassword false
+    match Account.GetNormalAccountsPairingInfoForWatchWallet password with
     | None ->
         Presentation.Error
             "There needs to be both Ether-based accounts and Utxo-based accounts to be able to use this feature."

@@ -96,6 +96,7 @@ type ChannelStore(account: IUtxoAccount) =
 
     member val Account = account
     member val Currency = (account :> IAccount).Currency
+    member val Network = UtxoCoin.Account.GetNetwork (account :> IAccount).Currency
 
     member self.AccountDir: DirectoryInfo =
         Config.GetConfigDir self.Currency AccountKind.Normal
@@ -131,6 +132,34 @@ type ChannelStore(account: IUtxoAccount) =
                 (channelId.ToString())
                 ChannelStore.ChannelFileEnding
         )
+
+    member self.NodeSecretFileName(): string =
+        Path.Combine(
+            self.ChannelDir.FullName,
+            "node-secret"
+        )
+    
+    member internal self.AddNodeSecret (nodeSecretString: string) (password: string) =
+        let nodeSecret = NodeSecret <| Key.Parse(nodeSecretString, self.Network)
+        let encryptedNodeSecret =
+            let secret = nodeSecret.RawKey().GetBitcoinSecret self.Network
+            let encryptedSecret =
+                secret.PrivateKey.GetEncryptedBitcoinSecret(password, self.Network)
+            encryptedSecret.ToWif()
+        let path = self.NodeSecretFileName()
+        if File.Exists path then
+            failwith "node secret has already been added"
+        File.WriteAllText(path, encryptedNodeSecret)
+
+    member internal self.GetNodeSecretOpt (password: string): Option<string> =
+        let path = self.NodeSecretFileName()
+        if File.Exists path then
+            let encryptedNodeSecret = File.ReadAllText path
+            let encryptedSecret =
+                BitcoinEncryptedSecretNoEC(encryptedNodeSecret, self.Network)
+            Some <| (NodeSecret (encryptedSecret.GetKey(password))).ToString()
+        else
+            None
 
     member internal self.LoadChannel (channelId: ChannelIdentifier): SerializedChannel =
         let fileName = self.ChannelFileName channelId
