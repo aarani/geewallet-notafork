@@ -33,7 +33,7 @@ let CreateFundingTx (account: UtxoCoin.IUtxoAccount)
         let proposal = {
             OriginAddress = account.PublicAddress
             Amount = pendingChannel.TransferAmount
-            DestinationAddress = pendingChannel.FundingDestination.ToString()
+            DestinationAddress = pendingChannel.FundingDestinationString
         }
         Account.SaveUnsignedTransaction proposal metadata unsignedFilePath
         Console.WriteLine("Transaction saved. Now copy it to the device with the private \
@@ -42,7 +42,7 @@ let CreateFundingTx (account: UtxoCoin.IUtxoAccount)
             let signedFilePath =
                 UserInteraction.AskFileNameToLoad("Enter file name to load the signed transaction: ")
             let signedTransaction = Account.LoadSignedTransactionFromFile signedFilePath.FullName
-            if signedTransaction.TransactionInfo.Proposal <> proposal then
+            if signedTransaction.TransactionInfo.Proposal.DestinationAddress <> proposal.DestinationAddress then
                 Console.WriteLine("Transaction data does not match. Incorrect file?")
                 getSignedTransaction()
             else 
@@ -502,7 +502,8 @@ let rec AddReadOnlyAccounts() =
     Console.Write "JSON fragment from wallet to pair with: "
     let watchWalletInfoJson = Console.ReadLine().Trim()
     let watchWalletInfo = Marshalling.Deserialize watchWalletInfoJson
-    Account.CreateReadOnlyAccounts watchWalletInfo
+    let password = UserInteraction.AskPassword false
+    Account.CreateReadOnlyAccounts watchWalletInfo password
 
 let ArchiveAccount() =
     let account = UserInteraction.AskAccount()

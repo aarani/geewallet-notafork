@@ -60,7 +60,7 @@ module Account =
             failwith <| SPrintF1 "Assertion failed: currency %A should be UTXO-type" currency
         match currency with
         | BTC -> Config.BitcoinNet()
-        | LTC -> Config.LitecoinNet
+        | LTC -> Config.LitecoinNet()
         | _ -> failwith <| SPrintF1 "Assertion failed: UTXO currency %A not supported?" currency
 
     // technique taken from https://electrumx.readthedocs.io/en/latest/protocol-basics.html#script-hashes
@@ -90,7 +90,7 @@ module Account =
         let privateKey = Key.Parse(privateKey, GetNetwork currency)
         GetPublicAddressFromPublicKey currency privateKey.PubKey
 
-    let internal GetAccountFromFile (accountFile: FileRepresentation) (currency: Currency) kind: IAccount =
+    let internal GetAccountFromFile (accountFile: FileRepresentation) (currency: Currency) kind: IUtxoAccount =
         if not (currency.IsUtxo()) then
             failwith <| SPrintF1 "Assertion failed: currency %A should be UTXO-type" currency
         match kind with
@@ -99,13 +99,13 @@ module Account =
                                 accountFile,
                                 (fun accountFile -> accountFile.Name),
                                 GetPublicKeyFromReadOnlyAccountFile)
-                                            :> IAccount
+                                            :> IUtxoAccount
         | AccountKind.Normal ->
             let fromAccountFileToPublicAddress = GetPublicAddressFromNormalAccountFile currency
             let fromAccountFileToPublicKey = GetPublicKeyFromNormalAccountFile
             NormalUtxoAccount(currency, accountFile,
                               fromAccountFileToPublicAddress, fromAccountFileToPublicKey)
-            :> IAccount
+            :> IUtxoAccount
         | _ ->
             failwith <| SPrintF1 "Kind (%A) not supported for this API" kind
 
@@ -528,9 +528,23 @@ module Account =
                         BITCOIN_ADDRESS_BECH32_PREFIX_REGTEST
                     ]
             | LTC ->
-                let LITECOIN_ADDRESS_PUBKEYHASH_PREFIX = "L"
-                let LITECOIN_ADDRESS_SCRIPTHASH_PREFIX = "M"
-                [ LITECOIN_ADDRESS_PUBKEYHASH_PREFIX; LITECOIN_ADDRESS_SCRIPTHASH_PREFIX ]
+                if Config.LitecoinNet() = NBitcoin.Altcoins.Litecoin.Instance.Mainnet then
+                    let LITECOIN_ADDRESS_PUBKEYHASH_PREFIX = "L"
+                    let LITECOIN_ADDRESS_SCRIPTHASH_PREFIX = "M"
+                    [
+                        LITECOIN_ADDRESS_PUBKEYHASH_PREFIX
+                        LITECOIN_ADDRESS_SCRIPTHASH_PREFIX
+                    ]
+                else
+                    let LITECOIN_ADDRESS_PUBKEYHASH_PREFIX_0 = "n"
+                    let LITECOIN_ADDRESS_PUBKEYHASH_PREFIX_1 = "m"
+                    let LITECOIN_ADDRESS_SCRIPTHASH_PREFIX = "Q"
+                    [
+                        LITECOIN_ADDRESS_PUBKEYHASH_PREFIX_0
+                        LITECOIN_ADDRESS_PUBKEYHASH_PREFIX_1
+                        LITECOIN_ADDRESS_SCRIPTHASH_PREFIX
+                    ]
+
             | _ -> failwith <| SPrintF1 "Unknown UTXO currency %A" currency
 
         if not (utxoCoinValidAddressPrefixes.Any(fun prefix -> address.StartsWith prefix)) then

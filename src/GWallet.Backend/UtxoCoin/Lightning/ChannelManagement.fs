@@ -161,7 +161,7 @@ type ChannelStore(account: IUtxoAccount) =
         let channelStore = ChannelStore account
         let network = channelStore.Network
         let nodeMasterPrivKey =
-            NodeMasterPrivKey <| ExtKey.Parse(nodeMasterPrivKeyString, network)
+            NodeMasterPrivKey.Parse nodeMasterPrivKeyString network
         let encryptedNodeMasterPrivKey =
             let privateExtKey = nodeMasterPrivKey.RawExtKey()
             let privateKey = privateExtKey.PrivateKey
@@ -170,8 +170,10 @@ type ChannelStore(account: IUtxoAccount) =
             let encryptedSecret =
                 secret.PrivateKey.GetEncryptedBitcoinSecret(password, network)
             let encryptedSecretString = encryptedSecret.ToWif()
-            let publicExtKeyString = publicExtKey.ToString()
+            let publicExtKeyString = publicExtKey.ToString network
             String.concat "\n" [encryptedSecretString; publicExtKeyString]
+        if not channelStore.ChannelDir.Exists then
+            channelStore.ChannelDir.Create()
         let path = channelStore.NodeMasterPrivKeyFileName()
         if File.Exists path then
             failwith "channel store for this account has already been initialised"
@@ -199,7 +201,7 @@ type ChannelStore(account: IUtxoAccount) =
                 let privateExtKey = ExtKey(publicExtKey, privateKey)
                 NodeMasterPrivKey privateExtKey
             | _ -> failwith "invalid account type"
-        nodeMasterPrivKey.ToString()
+        nodeMasterPrivKey.ToString self.Network
 
     member internal self.LoadChannel (channelId: ChannelIdentifier): SerializedChannel =
         let fileName = self.ChannelFileName channelId
