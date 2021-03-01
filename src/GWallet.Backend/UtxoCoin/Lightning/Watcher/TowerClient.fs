@@ -95,5 +95,5 @@ type internal TowerClient =
             return  
                 match response with
                 | TowerAPIResponse (reward) -> reward.RewardAddress
-                | TowerAPIError (e) -> failwith (sprintf "Tower returned an error: %s" (e.ToString()))
+                | TowerAPIError (_) -> failwith ("Tower returned an error")
         }
