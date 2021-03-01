@@ -10,9 +10,9 @@ export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
 
 
 # Install bitcoin core
-apt install -y curl tar gzip
-curl -OJL https://bitcoin.org/bin/bitcoin-core-0.20.0/bitcoin-0.20.0-x86_64-linux-gnu.tar.gz
-tar -C /usr/local --strip-components 1 -xzf bitcoin-0.20.0-x86_64-linux-gnu.tar.gz
+# apt install -y curl tar gzip
+# curl -OJL https://bitcoin.org/bin/bitcoin-core-0.20.0/bitcoin-0.20.0-x86_64-linux-gnu.tar.gz
+# tar -C /usr/local --strip-components 1 -xzf bitcoin-0.20.0-x86_64-linux-gnu.tar.gz
 
 # Install electrumx
 #apt install -y curl unzip python3-pip
@@ -32,6 +32,9 @@ gpg --export BC528686B50D79E339D3721CEB3E94ADBE1229CF | apt-key add -
 echo 'deb [arch=amd64,arm64,armhf] https://packages.microsoft.com/debian/10/prod buster main' > /etc/apt/sources.list.d/microsoft.list
 echo 'deb https://deb.ln-ask.me/beta buster common local desktop' > /etc/apt/sources.list.d/cryptoanarchy.list
 apt update
+
+# install bitcoin core
+apt install -y bitcoin-fullchain-regtest bitcoind bitcoin-cli
 
 # Install electrs
 apt install -y electrs
