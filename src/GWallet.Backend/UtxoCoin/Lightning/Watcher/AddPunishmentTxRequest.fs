@@ -1,4 +1,4 @@
-﻿namespace GWallet.Backend.UtxoCoin.Lightning.Watcher
+﻿namespace GeeTower.API
 
 type AddPunishmentTxRequest =
     {
