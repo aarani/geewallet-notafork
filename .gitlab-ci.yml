@@ -10,7 +10,7 @@ stockmono_buildenv:
   stage: buildenv
   script:
     - apt update
-    - apt install docker.io
+    - apt install -y docker.io
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $CI_REGISTRY_IMAGE/stock_env:$CI_COMMIT_SHA -f stockmono.docker .
     - docker push $CI_REGISTRY_IMAGE/stock_env:$CI_COMMIT_SHA 
