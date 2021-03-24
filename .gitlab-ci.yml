@@ -6,11 +6,11 @@ stages:
   - package
 
 stockmono_buildenv:
-  image: docker:19.03.12
+  image: ubuntu:20.04
   stage: buildenv
-  services:
-    - docker:19.03.12-dind
   script:
+    - apt update
+    - apt install docker.io
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $CI_REGISTRY_IMAGE/stock_env:$CI_COMMIT_SHA -f stockmono.docker .
     - docker push $CI_REGISTRY_IMAGE/stock_env:$CI_COMMIT_SHA 
