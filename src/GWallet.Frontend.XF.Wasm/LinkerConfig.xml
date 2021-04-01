@@ -1,0 +1,17 @@
+﻿<linker>
+  <assembly fullname="GWallet.Frontend.XF.Wasm" />
+  <assembly fullname="Uno.UI" />
+  <assembly fullname="FSharp.Core" />
+  <assembly fullname="FSharp.Data" />
+  <assembly fullname="mscorlib" />
+  <assembly fullname="GWallet.Frontend.XF" />
+  <assembly fullname="GWallet.Backend.NetStandard" />
+  <assembly fullname="Newtonsoft.Json" />
+  <assembly fullname="Xamarin.Forms.Core" />
+  <assembly fullname="NBitcoin" />
+  <assembly fullname="NBitcoin.Altcoins" />
+  <assembly fullname="System.Core">
+	<!-- This is required by Json.NET and any expression.Compile caller -->
+	  <type fullname="*" />
+  </assembly>
+</linker>

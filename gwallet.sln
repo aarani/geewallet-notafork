@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27130.0
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30717.126
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GWallet.Backend", "src\GWallet.Backend\GWallet.Backend.fsproj", "{96F9B3E5-11F8-4F5F-AADC-51D0D995B3D2}"
 EndProject
@@ -10,13 +10,13 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GWallet.Frontend.Console", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{9DFD61F8-2CED-47F1-BB3A-48A383D4751D}"
 	ProjectSection(SolutionItems) = preProject
-		configure.sh = configure.sh
-		Makefile = Makefile
+		scripts\bump.fsx = scripts\bump.fsx
 		scripts\configure.fsx = scripts\configure.fsx
+		configure.sh = configure.sh
 		scripts\make.fsx = scripts\make.fsx
 		scripts\make.sh = scripts\make.sh
+		Makefile = Makefile
 		scripts\replace.fsx = scripts\replace.fsx
-		scripts\bump.fsx = scripts\bump.fsx
 	EndProjectSection
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "GWallet.Backend.NetStandard", "src\GWallet.Backend.NetStandard\GWallet.Backend.NetStandard.fsproj", "{D1D192E0-F226-40AD-8D81-687F7E6F7DAB}"
@@ -41,13 +41,15 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "GWallet.Frontend.XF.iOS", "
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "InfraLib", "InfraLib", "{6EE07541-91A1-42C2-A21F-2809BBDC2F50}"
 	ProjectSection(SolutionItems) = preProject
-		scripts\InfraLib\Process.fs = scripts\InfraLib\Process.fs
 		scripts\InfraLib\Git.fs = scripts\InfraLib\Git.fs
 		scripts\InfraLib\Misc.fs = scripts\InfraLib\Misc.fs
 		scripts\InfraLib\Network.fs = scripts\InfraLib\Network.fs
+		scripts\InfraLib\Process.fs = scripts\InfraLib\Process.fs
 		scripts\InfraLib\Taiga.fs = scripts\InfraLib\Taiga.fs
 		scripts\InfraLib\Unix.fs = scripts\InfraLib\Unix.fs
 	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GWallet.Frontend.XF.Wasm", "src\GWallet.Frontend.XF.Wasm\GWallet.Frontend.XF.Wasm.csproj", "{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -302,9 +304,30 @@ Global
 		{5DD656CE-3319-46BB-B47F-BBED8CC722FD}.Release|x64.Build.0 = Release|iPhoneSimulator
 		{5DD656CE-3319-46BB-B47F-BBED8CC722FD}.Release|x86.ActiveCfg = Release|iPhoneSimulator
 		{5DD656CE-3319-46BB-B47F-BBED8CC722FD}.Release|x86.Build.0 = Release|iPhoneSimulator
-	EndGlobalSection
-	GlobalSection(NestedProjects) = preSolution
-		{6EE07541-91A1-42C2-A21F-2809BBDC2F50} = {CE79AB9D-0FB9-4606-B7C6-A78C0858CC54}
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|ARM.ActiveCfg = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|ARM.Build.0 = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|iPhone.ActiveCfg = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|iPhone.Build.0 = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|iPhoneSimulator.ActiveCfg = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|iPhoneSimulator.Build.0 = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|x64.Build.0 = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Debug|x86.Build.0 = Debug|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|ARM.ActiveCfg = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|ARM.Build.0 = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|iPhone.ActiveCfg = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|iPhone.Build.0 = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|iPhoneSimulator.ActiveCfg = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|iPhoneSimulator.Build.0 = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|x64.ActiveCfg = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|x64.Build.0 = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|x86.ActiveCfg = Release|Any CPU
+		{91DB41CB-80B6-4F6A-B1FA-6A7B90B404F1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
