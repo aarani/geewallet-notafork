@@ -27,8 +27,9 @@ namespace GWallet.Frontend.XamForms.UWP
         {
             this.InitializeComponent();
 
-            // ZXing.Net.Mobile.Forms.WindowsUniversal.ZXingScannerViewRenderer.Init();
-
+#if !__WASM__
+            ZXing.Net.Mobile.Forms.WindowsUniversal.ZXingScannerViewRenderer.Init();
+#endif
             var app = new GWallet.Frontend.XF.App();
             LoadApplication(app);
         }
