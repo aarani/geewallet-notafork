@@ -43,8 +43,11 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
                                                                     c = '!' ||
                                                                     c = ''')
         let IsColdStorageMode() =
-            let currentConnectivityInstance = Connectivity.NetworkAccess
-            currentConnectivityInstance <> NetworkAccess.Internet
+            try
+                let currentConnectivityInstance = Connectivity.NetworkAccess
+                currentConnectivityInstance <> NetworkAccess.Internet
+            with 
+                | :? System.PlatformNotSupportedException -> false
 
         let AllWordsInPassphraseExistInDictionaries(passphrase: string): bool =
             let words = passphrase.Split([|","; "."; " "; "-"; "_"|], StringSplitOptions.RemoveEmptyEntries)
@@ -94,8 +97,10 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
     do
         dobDatePicker.MaximumDate <- DateTime.UtcNow.Date
 
-        Caching.Instance.BootstrapServerStatsFromTrustedSource()
-            |> FrontendHelpers.DoubleCheckCompletionAsync false
+        //Is there a better way to prevent this getting executed on wasm?
+        if Device.RuntimePlatform <> Device.UWP then
+            Caching.Instance.BootstrapServerStatsFromTrustedSource()
+                |> FrontendHelpers.DoubleCheckCompletionAsync false
 
     [<Obsolete(DummyPageConstructorHelper.Warning)>]
     new() = WelcomePage(DummyPageConstructorHelper.GlobalFuncToRaiseExceptionIfUsedAtRuntime())
