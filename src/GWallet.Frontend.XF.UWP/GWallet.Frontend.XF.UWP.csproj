@@ -142,7 +142,7 @@
       <Version>6.2.10</Version>
     </PackageReference>
     <PackageReference Include="Xamarin.Forms">
-      <Version>4.8.0.1451</Version>
+      <Version>5.0.0.1931</Version>
     </PackageReference>
     <PackageReference Include="SkiaSharp">
       <Version>1.68.0</Version>
