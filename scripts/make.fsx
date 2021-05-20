@@ -257,6 +257,7 @@ let RunTests (suite: string) =
             "ChannelLocalForceClosing"
             "ChannelRemoteForceClosingByFunder"
             "ChannelRemoteForceClosingByFundee"
+            "UpdateFeeAfterSendingMonoHopPayments"
             "Revocation"
             "CPFP"
         ]

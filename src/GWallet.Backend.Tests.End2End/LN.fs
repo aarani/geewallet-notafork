@@ -355,6 +355,64 @@ type LN() =
         (serverWallet :> IDisposable).Dispose()
     }
 
+    [<Category "G2G_UpdateFeeAfterSendingMonoHopPayments_Funder">]
+    [<Test>]
+    member __.``can update fee after sending monohop payments (funder)``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
+            try
+                OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
+            with
+            | ex ->
+                Assert.Inconclusive (
+                    sprintf
+                        "Channel-closing inconclusive because Channel open failed, fix this first: %s"
+                        (ex.ToString())
+                )
+                failwith "unreachable"
+        let! feeRate = ElectrumServer.EstimateFeeRate()
+
+        try
+            do! SendMonoHopPayments clientWallet channelId fundingAmount
+        with
+        | ex ->
+            Assert.Inconclusive (
+                sprintf
+                    "Channel-closing inconclusive because sending of monohop payments failed, fix this first: %s"
+                    (ex.ToString())
+            )
+            failwith "unreachable"
+
+        ElectrumServer.SetEstimatedFeeRate (feeRate * 4u)
+        let! updateFeeRes =
+            Lightning.Network.MaybeUpdateFee (Node.Client clientWallet.NodeClient) channelId
+        UnwrapResult updateFeeRes "MaybeUpdateFee failed"
+
+        do! ClientCloseChannel clientWallet bitcoind channelId
+
+        TearDown clientWallet lnd electrumServer bitcoind
+    }
+
+    [<Category "G2G_UpdateFeeAfterSendingMonoHopPayments_Fundee">]
+    [<Test>]
+    member __.``can accept fee update after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+        let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
+        let! feeRate = ElectrumServer.EstimateFeeRate()
+
+        do! ReceiveMonoHopPayments serverWallet channelId
+
+        ElectrumServer.SetEstimatedFeeRate (feeRate * 4u)
+        let! acceptUpdateFeeRes =
+            Lightning.Network.AcceptUpdateFee serverWallet.NodeServer channelId
+        UnwrapResult acceptUpdateFeeRes "AcceptUpdateFee failed"
+
+        let! closeChannelRes = Lightning.Network.AcceptCloseChannel serverWallet.NodeServer channelId
+        match closeChannelRes with
+        | Ok _ -> ()
+        | Error err -> failwith (SPrintF1 "failed to accept close channel: %A" err)
+
+        (serverWallet :> IDisposable).Dispose()
+    }
+
     [<Test>]
     member __.``can open channel with LND``() = Async.RunSynchronously <| async {
         let! _channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = OpenChannelWithFundee None
@@ -871,7 +929,7 @@ type LN() =
 
         // fund geewallet
         let geewalletAccountAmount = Money (25m, MoneyUnit.BTC)
-        let feeRate = FeeRatePerKw 2500u
+        let! feeRate = ElectrumServer.EstimateFeeRate()
         let! _txid = lnd.SendCoins geewalletAccountAmount walletInstance.Address feeRate
 
         // wait for lnd's transaction to appear in mempool
