@@ -448,6 +448,7 @@ module LayerTwo =
                         (Node.Client nodeClient).CreateRecoveryTxForRemoteForceClose
                             channelInfo.ChannelId
                             closingTxId
+                            true
                     match recoveryTxStringResult with
                     | Ok recoveryTxString ->
                         let! txIdString =
