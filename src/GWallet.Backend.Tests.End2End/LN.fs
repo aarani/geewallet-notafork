@@ -383,9 +383,11 @@ type LN() =
             failwith "unreachable"
 
         ElectrumServer.SetEstimatedFeeRate (feeRate * 4u)
+        let! newFeeRateOpt = clientWallet.ChannelStore.FeeUpdateRequired channelId
+        let newFeeRate = UnwrapOption newFeeRateOpt "Fee update should be required"
         let! updateFeeRes =
-            Lightning.Network.MaybeUpdateFee (Node.Client clientWallet.NodeClient) channelId
-        UnwrapResult updateFeeRes "MaybeUpdateFee failed"
+            Lightning.Network.UpdateFee (Node.Client clientWallet.NodeClient) channelId newFeeRate
+        UnwrapResult updateFeeRes "UpdateFee failed"
 
         do! ClientCloseChannel clientWallet bitcoind channelId
 

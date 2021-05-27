@@ -54,5 +54,5 @@ module public Network =
 
     let public EndPoint (nodeServer: NodeServer) = nodeServer.EndPoint
 
-    let public MaybeUpdateFee (lightningNode: Node) = lightningNode.MaybeUpdateFee
+    let public UpdateFee (lightningNode: Node) = lightningNode.UpdateFee
     let public AcceptUpdateFee (lightningNode: NodeServer) = lightningNode.AcceptUpdateFee
