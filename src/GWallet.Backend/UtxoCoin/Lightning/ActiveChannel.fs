@@ -476,7 +476,7 @@ and internal ActiveChannel =
                                 }
                         }
                         let channelPrivKeys = connectedChannelAfterRevokeAndAck.Channel.ChannelPrivKeys
-                        let commitments = self.Commitments()
+                        let savedChannelState = self.ConnectedChannel.Channel.Channel.SavedChannelState
                         let network = connectedChannelAfterRevokeAndAck.Network
                         let account = connectedChannelAfterRevokeAndAck.Account
             
@@ -487,14 +487,14 @@ and internal ActiveChannel =
                                 breachStore
                                     .LoadBreachData(connectedChannelAfterRevokeAndAck.ChannelId)
                                     .InsertRevokedCommitment perCommitmentSecret
-                                                                commitments
+                                                                savedChannelState
                                                                 channelPrivKeys
                                                                 network
                                                                 account
                         breachStore.SaveBreachData breachData
             
                         do! TowerClient.Default.CreateAndSendPunishmentTx perCommitmentSecret
-                                    commitments
+                                    savedChannelState
                                     channelPrivKeys
                                     network
                                     account
@@ -649,25 +649,28 @@ and internal ActiveChannel =
         | Ok (peerNodeAfterAcceptUpdateFeeReceived, channelMsg) ->
             match channelMsg with
             | :? UpdateFeeMsg as updateFeeMsg ->
-                let res, channelWrapperAfterUpdateFeeReceived =
-                    let channelCmd =
-                        ChannelCommand.ApplyUpdateFee
-                            updateFeeMsg
-                    channelWrapper.ExecuteCommand channelCmd <| function
-                        | (WeAcceptedUpdateFee(_))::[] -> Some ()
-                        | _ -> None
-                let connectedChannelAfterUpdateFeeReceived = {
-                    connectedChannel with
-                        Channel = channelWrapperAfterUpdateFeeReceived
-                        PeerNode = peerNodeAfterAcceptUpdateFeeReceived
-                }
-                match res with
+                let channelWrapperAfterUpdateFeeReceivedRes =
+                    channelWrapper.Channel.ApplyUpdateFee updateFeeMsg
+
+                match channelWrapperAfterUpdateFeeReceivedRes with
                 | Error err ->
+                    let connectedChannelAfterUpdateFeeReceived = {
+                        connectedChannel with
+                            Channel = channelWrapper
+                            PeerNode = peerNodeAfterAcceptUpdateFeeReceived
+                    }
                     let! connectedChannelAfterError = connectedChannelAfterUpdateFeeReceived.SendError err.Message
                     let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
                     return Error <| AcceptUpdateFeeError.InvalidUpdateFee
                         (brokenChannel, err)
-                | Ok () ->
+                | Ok channelWrapperAfterUpdateFeeReceived ->
+                    let connectedChannelAfterUpdateFeeReceived = {
+                        connectedChannel with
+                            Channel = {
+                                Channel = channelWrapperAfterUpdateFeeReceived
+                            }
+                            PeerNode = peerNodeAfterAcceptUpdateFeeReceived
+                    }
                     connectedChannelAfterUpdateFeeReceived.SaveToWallet()
                     let activeChannel = { ConnectedChannel = connectedChannelAfterUpdateFeeReceived }
                     let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
@@ -685,18 +688,13 @@ and internal ActiveChannel =
                                        : Async<Result<ActiveChannel, UpdateFeeError>> = async {
         let connectedChannel = self.ConnectedChannel
         let channelWrapper = connectedChannel.Channel
-        let res, channelWrapperAfterUpdateFee =
-            let channelCmd = UpdateFee {
-                FeeRatePerKw = newFeeRate
-            }
-            channelWrapper.ExecuteCommand channelCmd <| function
-                | (WeAcceptedOperationUpdateFee(updateFeeMsg, _))::[] -> Some updateFeeMsg
-                | _ -> None
-        let connectedChannelAfterUpdateFee = {
-            connectedChannel with
-                Channel = channelWrapperAfterUpdateFee
-        }
-        match res with
+        let channelWrapperAndMsgAfterUpdateFeeRes =
+            {
+                OperationUpdateFee.FeeRatePerKw = newFeeRate
+            } 
+            |> channelWrapper.Channel.UpdateFee 
+
+        match channelWrapperAndMsgAfterUpdateFeeRes with
         | Error (WeCannotAffordFee(localChannelReserve, requiredFee, missingAmount)) ->
             Infrastructure.LogDebug
             <| SPrintF4
@@ -710,14 +708,20 @@ and internal ActiveChannel =
                 (missingAmount.ToString())
             let activeChannelAfterUpdateFeeAttempt = {
                 self with
-                    ConnectedChannel = connectedChannelAfterUpdateFee
+                    ConnectedChannel = connectedChannel
             }
             return Ok activeChannelAfterUpdateFeeAttempt
         | Error err ->
             return
                 SPrintF1 "error executing update fee command: %s" err.Message
                 |> failwith
-        | Ok updateFeeMsg ->
+        | Ok (channelWrapperAfterUpdateFee, updateFeeMsg) ->
+            let connectedChannelAfterUpdateFee = {
+                connectedChannel with
+                    Channel = {
+                        Channel = channelWrapperAfterUpdateFee
+                    }
+            }
             let peerNode = connectedChannelAfterUpdateFee.PeerNode
             let! peerNodeAfterUpdateFeeMsgSent =
                 peerNode.SendMsg updateFeeMsg

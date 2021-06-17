@@ -641,8 +641,6 @@ type Node =
                         UtxoCoin.Account.GetNetwork currency
                     let commitmentTx =
                         Transaction.Parse(commitmentTxString, network)
-                    let commitments =
-                        serializedChannel.Commitments
                     let channelPrivKeys =
                         let channelIndex = serializedChannel.ChannelIndex
                         nodeMasterPrivKey.ChannelPrivKeys channelIndex
@@ -655,12 +653,8 @@ type Node =
                     }
                     let transactionBuilderResult =
                         ForceCloseFundsRecovery.tryGetFundsFromLocalCommitmentTx
-                            commitments.IsFunder
-                            commitments.LocalParams
-                            commitments.FundingScriptCoin
                             channelPrivKeys
-                            commitments.RemoteChannelPubKeys
-                            network
+                            serializedChannel.SavedChannelState.StaticChannelConfig
                             commitmentTx
                     match transactionBuilderResult with
                     | Error (LocalCommitmentTxRecoveryError.InvalidCommitmentTx invalidCommitmentTxError) ->
@@ -675,7 +669,7 @@ type Node =
                                     transactionBuilder
                                     feeRate
                                     commitmentTx
-                                    commitments.FundingScriptCoin
+                                    (serializedChannel.FundingScriptCoin())
                             else
                                 transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
                         transactionBuilder.SendFees fee |> ignore
@@ -717,7 +711,6 @@ type Node =
                 | Client nodeClient -> nodeClient.NodeMasterPrivKey
                 | Server nodeServer -> nodeServer.NodeMasterPrivKey
             let serializedChannel = self.ChannelStore.LoadChannel channelId
-            let commitments = serializedChannel.Commitments
             let currency = self.Account.Currency
             let network = UtxoCoin.Account.GetNetwork currency
             let channelPrivKeys =
@@ -732,13 +725,8 @@ type Node =
             }
             let transactionBuilderResult =
                 ForceCloseFundsRecovery.tryGetFundsFromRemoteCommitmentTx
-                    commitments.IsFunder
-                    commitments.FundingScriptCoin
-                    commitments.RemotePerCommitmentSecrets
-                    commitments.RemoteCommit
                     channelPrivKeys
-                    commitments.RemoteChannelPubKeys
-                    network
+                    serializedChannel.SavedChannelState
                     closingTx.Tx.NbTx
 
             match transactionBuilderResult with
@@ -756,7 +744,7 @@ type Node =
                             transactionBuilder
                             feeRate
                             closingTx.Tx.NbTx
-                            commitments.FundingScriptCoin
+                            (serializedChannel.FundingScriptCoin())
                     else
                         transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
                 transactionBuilder.SendFees fee |> ignore
