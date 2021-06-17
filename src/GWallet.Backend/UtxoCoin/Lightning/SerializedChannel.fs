@@ -94,16 +94,18 @@ type SerializedChannel =
 
     member internal self.Balance(): DotNetLightning.Utils.LNMoney =
         self.SavedChannelState.LocalCommit.Spec.ToLocal
-        (*
+        
     member internal self.SpendableBalance(): LNMoney =
-        self.
+        Channel.SpendableBalanceFromParts self.SavedChannelState
+                                          self.RemoteNextCommitInfo
+                                          self.Commitments
         
     // How low the balance can go. A channel must maintain enough balance to
     // cover the channel reserve. The funder must also keep enough in the
     // channel to cover the closing fee.
     member internal this.MinBalance(): DotNetLightning.Utils.LNMoney =
         this.Balance() - this.SpendableBalance()
-        *)
+        
     // How high the balance can go. The fundee will only be able to receive up
     // to this amount before the funder no longer has enough funds to cover
     // the channel reserve and closing fee.
