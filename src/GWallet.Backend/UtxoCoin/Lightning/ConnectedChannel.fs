@@ -214,7 +214,6 @@ type internal ConnectedChannel =
         let channelStore = ChannelStore self.Account
         let serializedChannel : SerializedChannel = {
             ChannelIndex = self.ChannelIndex
-            ChannelOptions = self.Channel.Channel.ChannelOptions
             RemoteNextCommitInfo = self.Channel.Channel.RemoteNextCommitInfo
             SavedChannelState = self.Channel.Channel.SavedChannelState
             NegotiatingState = self.Channel.Channel.NegotiatingState

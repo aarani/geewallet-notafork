@@ -427,83 +427,80 @@ and internal ActiveChannel =
         let channel = connectedChannel.Channel
 
         let ourCommitmentSignedMsgAndChannelRes = channel.Channel.SignCommitment ()
-        let channelAfterCommitmentSigned, ourCommitmentSignedMsgOpt = UnwrapResult ourCommitmentSignedMsgAndChannelRes "error executing sign commit command"
+        let channelAfterCommitmentSigned, ourCommitmentSignedMsg = UnwrapResult ourCommitmentSignedMsgAndChannelRes "error executing sign commit command"
 
-        match ourCommitmentSignedMsgOpt with 
-        | None -> return Ok self
-        | Some ourCommitmentSignedMsg ->
-            let! peerNodeAfterCommitmentSignedSent = peerNode.SendMsg ourCommitmentSignedMsg
+        let! peerNodeAfterCommitmentSignedSent = peerNode.SendMsg ourCommitmentSignedMsg
             
-            let! recvChannelMsgRes = peerNodeAfterCommitmentSignedSent.RecvChannelMsg()
-            match recvChannelMsgRes with
-            | Error (RecvMsg recvMsgError) -> return Error <| RecvRevokeAndAck recvMsgError
-            | Error (ReceivedPeerErrorMessage (peerNodeAfterRevokeAndAckReceived, errorMessage)) ->
-                let connectedChannelAfterError = {
-                    connectedChannel with
-                        PeerNode = peerNodeAfterRevokeAndAckReceived
-                        Channel = {
-                            Channel = channelAfterCommitmentSigned
-                        }
-                }
-                let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
-                return Error <| CommitmentSignedPeerErrorResponse
-                    (brokenChannel, errorMessage)
-            | Ok (peerNodeAfterRevokeAndAckReceived, channelMsg) ->
-                match channelMsg with
-                | :? RevokeAndACKMsg as theirRevokeAndAckMsg ->
-                    let channelAferRevokeAndAckRes =
-                        channelAfterCommitmentSigned.ApplyRevokeAndACK theirRevokeAndAckMsg
+        let! recvChannelMsgRes = peerNodeAfterCommitmentSignedSent.RecvChannelMsg()
+        match recvChannelMsgRes with
+        | Error (RecvMsg recvMsgError) -> return Error <| RecvRevokeAndAck recvMsgError
+        | Error (ReceivedPeerErrorMessage (peerNodeAfterRevokeAndAckReceived, errorMessage)) ->
+            let connectedChannelAfterError = {
+                connectedChannel with
+                    PeerNode = peerNodeAfterRevokeAndAckReceived
+                    Channel = {
+                        Channel = channelAfterCommitmentSigned
+                    }
+            }
+            let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
+            return Error <| CommitmentSignedPeerErrorResponse
+                (brokenChannel, errorMessage)
+        | Ok (peerNodeAfterRevokeAndAckReceived, channelMsg) ->
+            match channelMsg with
+            | :? RevokeAndACKMsg as theirRevokeAndAckMsg ->
+                let channelAferRevokeAndAckRes =
+                    channelAfterCommitmentSigned.ApplyRevokeAndACK theirRevokeAndAckMsg
 
-                    match channelAferRevokeAndAckRes with
-                    | Error err ->
-                        let connectedChannelAfterError = {
-                            connectedChannel with
-                                PeerNode = peerNodeAfterRevokeAndAckReceived
-                                Channel = {
-                                    Channel = channelAfterCommitmentSigned
-                                }
-                        }
-                        let! connectedChannelAfterErrorSent = connectedChannelAfterError.SendError err.Message
-                        let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterErrorSent }
-                        return Error <| InvalidRevokeAndAck
-                            (brokenChannel, err)
-                    | Ok channelAferRevokeAndAck ->
-                        let connectedChannelAfterRevokeAndAck = {
-                            connectedChannel with
-                                PeerNode = peerNodeAfterRevokeAndAckReceived
-                                Channel = {
-                                    Channel = channelAferRevokeAndAck
-                                }
-                        }
-                        let channelPrivKeys = connectedChannelAfterRevokeAndAck.Channel.ChannelPrivKeys
-                        let savedChannelState = self.ConnectedChannel.Channel.Channel.SavedChannelState
-                        let network = connectedChannelAfterRevokeAndAck.Network
-                        let account = connectedChannelAfterRevokeAndAck.Account
+                match channelAferRevokeAndAckRes with
+                | Error err ->
+                    let connectedChannelAfterError = {
+                        connectedChannel with
+                            PeerNode = peerNodeAfterRevokeAndAckReceived
+                            Channel = {
+                                Channel = channelAfterCommitmentSigned
+                            }
+                    }
+                    let! connectedChannelAfterErrorSent = connectedChannelAfterError.SendError err.Message
+                    let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterErrorSent }
+                    return Error <| InvalidRevokeAndAck
+                        (brokenChannel, err)
+                | Ok channelAferRevokeAndAck ->
+                    let connectedChannelAfterRevokeAndAck = {
+                        connectedChannel with
+                            PeerNode = peerNodeAfterRevokeAndAckReceived
+                            Channel = {
+                                Channel = channelAferRevokeAndAck
+                            }
+                    }
+                    let channelPrivKeys = connectedChannelAfterRevokeAndAck.Channel.ChannelPrivKeys
+                    let savedChannelState = self.ConnectedChannel.Channel.Channel.SavedChannelState
+                    let network = connectedChannelAfterRevokeAndAck.Network
+                    let account = connectedChannelAfterRevokeAndAck.Account
             
-                        let perCommitmentSecret = theirRevokeAndAckMsg.PerCommitmentSecret
+                    let perCommitmentSecret = theirRevokeAndAckMsg.PerCommitmentSecret
             
-                        let breachStore = BreachDataStore account
-                        let! breachData =
-                                breachStore
-                                    .LoadBreachData(connectedChannelAfterRevokeAndAck.ChannelId)
-                                    .InsertRevokedCommitment perCommitmentSecret
-                                                                savedChannelState
-                                                                channelPrivKeys
-                                                                network
-                                                                account
-                        breachStore.SaveBreachData breachData
+                    let breachStore = BreachDataStore account
+                    let! breachData =
+                            breachStore
+                                .LoadBreachData(connectedChannelAfterRevokeAndAck.ChannelId)
+                                .InsertRevokedCommitment perCommitmentSecret
+                                                            savedChannelState
+                                                            channelPrivKeys
+                                                            network
+                                                            account
+                    breachStore.SaveBreachData breachData
             
-                        do! TowerClient.Default.CreateAndSendPunishmentTx perCommitmentSecret
-                                    savedChannelState
-                                    channelPrivKeys
-                                    network
-                                    account
-                                    true
+                    do! TowerClient.Default.CreateAndSendPunishmentTx perCommitmentSecret
+                                savedChannelState
+                                channelPrivKeys
+                                network
+                                account
+                                true
             
-                        connectedChannelAfterRevokeAndAck.SaveToWallet()
-                        let activeChannel = { ConnectedChannel = connectedChannelAfterRevokeAndAck }
-                        return Ok activeChannel
-                | _ -> return Error <| ExpectedRevokeAndAck channelMsg
+                    connectedChannelAfterRevokeAndAck.SaveToWallet()
+                    let activeChannel = { ConnectedChannel = connectedChannelAfterRevokeAndAck }
+                    return Ok activeChannel
+            | _ -> return Error <| ExpectedRevokeAndAck channelMsg
         
     }
 

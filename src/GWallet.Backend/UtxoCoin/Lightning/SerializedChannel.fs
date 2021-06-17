@@ -59,7 +59,6 @@ type SerializedChannel =
     {
         ChannelIndex: int
         SavedChannelState: SavedChannelState
-        ChannelOptions: ChannelOptions
         Commitments: Commitments
         RemoteNextCommitInfo: Option<RemoteNextCommitInfo>
         NegotiatingState: NegotiatingState
