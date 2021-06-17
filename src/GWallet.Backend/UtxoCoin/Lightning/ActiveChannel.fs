@@ -263,18 +263,14 @@ and internal ActiveChannel =
         let connectedChannel = fundedChannel.ConnectedChannel
         let peerNode = connectedChannel.PeerNode
         let channel = connectedChannel.Channel
-        let ourFundingLockedMsgRes, channelAfterFundingConfirmed =
-            let channelCmd =
-                ChannelCommand.ApplyFundingConfirmedOnBC(
-                    absoluteBlockHeight,
-                    txIndexInBlock,
-                    confirmationCount
-                )
-            channel.ExecuteCommand channelCmd <| function
-                | (FundingConfirmed (fundingLockedMsg, _))::[] ->
-                    Some fundingLockedMsg
-                | _ -> None
-        let ourFundingLockedMsg = UnwrapResult ourFundingLockedMsgRes "DNL error creating funding_locked msg"
+        let ourFundingLockedMsgAndChannelRes =
+            channel.Channel.ApplyFundingConfirmedOnBC
+                absoluteBlockHeight
+                txIndexInBlock
+                confirmationCount
+        let channelAfterFundingConfirmed, ourFundingLockedMsgOpt = UnwrapResult ourFundingLockedMsgAndChannelRes "DNL error creating funding_locked msg"
+        let ourFundingLockedMsg = UnwrapOption ourFundingLockedMsgOpt "//FIXME: this should be an error"
+
         let! peerNodeAfterFundingLockedSent = peerNode.SendMsg ourFundingLockedMsg
         let! theirFundingLockedMsgRes = async {
             match theirFundingLockedMsgOpt with
@@ -287,7 +283,9 @@ and internal ActiveChannel =
                     let connectedChannelAfterError = {
                         connectedChannel with
                             PeerNode = peerNodeAfterFundingLockedReceived
-                            Channel = channelAfterFundingConfirmed
+                            Channel = { 
+                                Channel = channelAfterFundingConfirmed 
+                            }
                     }
                     let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
                     return Error <| FundingLockedPeerErrorResponse
@@ -302,23 +300,32 @@ and internal ActiveChannel =
         match theirFundingLockedMsgRes with
         | Error err -> return Error err
         | Ok (peerNodeAfterFundingLockedReceived, theirFundingLockedMsg) ->
-            let res, channelAfterFundingLocked =
-                let channelCmd = ApplyFundingLocked theirFundingLockedMsg
-                channelAfterFundingConfirmed.ExecuteCommand channelCmd <| function
-                    | (BothFundingLocked _)::[] -> Some ()
-                    | _ -> None
-            let connectedChannelAfterFundingLocked = {
-                connectedChannel with
-                    PeerNode = peerNodeAfterFundingLockedReceived
-                    Channel = channelAfterFundingLocked
-            }
-            match res with
+            let channelAfterFundingLockedRes =
+                channelAfterFundingConfirmed.ApplyFundingLocked
+                    theirFundingLockedMsg
+
+            match channelAfterFundingLockedRes with
             | Error err ->
-                let! connectedChannelAfterErrorSent = connectedChannelAfterFundingLocked.SendError err.Message
+                let connectedChannelAfterError = {
+                    connectedChannel with
+                        PeerNode = peerNodeAfterFundingLockedReceived
+                        Channel = {
+                            Channel = channelAfterFundingConfirmed
+                        }
+                }
+
+                let! connectedChannelAfterErrorSent = connectedChannelAfterError.SendError err.Message
                 let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterErrorSent }
                 return Error <| InvalidFundingLocked
                     (brokenChannel, err)
-            | Ok () ->
+            | Ok channelAfterFundingLocked ->
+                let connectedChannelAfterFundingLocked = {
+                    connectedChannel with
+                        PeerNode = peerNodeAfterFundingLockedReceived
+                        Channel = {
+                            Channel = channelAfterFundingLocked
+                        }
+                }
                 connectedChannelAfterFundingLocked.SaveToWallet()
                 let activeChannel: ActiveChannel = {
                     ConnectedChannel = connectedChannelAfterFundingLocked
@@ -349,35 +356,28 @@ and internal ActiveChannel =
     static member private ConfirmFundingLocked (connectedChannel: ConnectedChannel)
                                                    : Async<Result<ActiveChannel, LockFundingError>> = async {
         let channel = connectedChannel.Channel
-        match channel.Channel.State with
-        | WaitForFundingConfirmed state ->
+        let nextLocalCommitmentId = channel.Channel.SavedChannelState.LocalCommit.Index.NextCommitment().Index()
+        let nextRemoteCommitmentId = channel.Channel.SavedChannelState.RemoteCommit.Index.NextCommitment().Index()
+        if nextLocalCommitmentId = UInt48.One && nextRemoteCommitmentId = UInt48.One then
             let fundedChannel = {
                 FundedChannel.ConnectedChannel = connectedChannel
                 TheirFundingLockedMsgOpt = 
-                    match state.RemoteNextPerCommitmentPointOpt with 
+                    match channel.Channel.RemoteNextCommitInfo with 
                     | None -> None
-                    | Some remoteNextPerCommitmentPoint -> 
+                    | Some remoteNextCommitInfo -> 
                         let msg : FundingLockedMsg = 
                             {
                                 ChannelId = channel.ChannelId.DnlChannelId
-                                NextPerCommitmentPoint = remoteNextPerCommitmentPoint
+                                NextPerCommitmentPoint = remoteNextCommitInfo.PerCommitmentPoint()
                             }
                         Some msg
             }
             return! ActiveChannel.CheckFundingConfirmed fundedChannel
-        | WaitForFundingLocked _ ->
-            let fundedChannel = {
-                FundedChannel.ConnectedChannel = connectedChannel
-                TheirFundingLockedMsgOpt = None
-            }
-            return! ActiveChannel.CheckFundingConfirmed fundedChannel
-        | ChannelState.Normal _ ->
+        else
             let activeChannel = {
                 ActiveChannel.ConnectedChannel = connectedChannel
             }
             return Ok activeChannel
-        | _ ->
-            return failwith <| SPrintF1 "unexpected channel state: %A" channel.Channel.State
     }
 
     static member internal ConnectReestablish (channelStore: ChannelStore)
@@ -426,76 +426,85 @@ and internal ActiveChannel =
         let peerNode = connectedChannel.PeerNode
         let channel = connectedChannel.Channel
 
-        let ourCommitmentSignedMsgRes, channelAfterCommitmentSigned =
-            let channelCmd = ChannelCommand.SignCommitment
-            channel.ExecuteCommand channelCmd <| function
-                | WeAcceptedOperationSign(msg, _, _)::[] -> Some msg
-                | _ -> None
-        let ourCommitmentSignedMsg = UnwrapResult ourCommitmentSignedMsgRes "error executing sign commit command"
+        let ourCommitmentSignedMsgAndChannelRes = channel.Channel.SignCommitment ()
+        let channelAfterCommitmentSigned, ourCommitmentSignedMsgOpt = UnwrapResult ourCommitmentSignedMsgAndChannelRes "error executing sign commit command"
 
-        let! peerNodeAfterCommitmentSignedSent = peerNode.SendMsg ourCommitmentSignedMsg
-
-        let! recvChannelMsgRes = peerNodeAfterCommitmentSignedSent.RecvChannelMsg()
-        match recvChannelMsgRes with
-        | Error (RecvMsg recvMsgError) -> return Error <| RecvRevokeAndAck recvMsgError
-        | Error (ReceivedPeerErrorMessage (peerNodeAfterRevokeAndAckReceived, errorMessage)) ->
-            let connectedChannelAfterError = {
-                connectedChannel with
-                    PeerNode = peerNodeAfterRevokeAndAckReceived
-                    Channel = channelAfterCommitmentSigned
-            }
-            let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
-            return Error <| CommitmentSignedPeerErrorResponse
-                (brokenChannel, errorMessage)
-        | Ok (peerNodeAfterRevokeAndAckReceived, channelMsg) ->
-            match channelMsg with
-            | :? RevokeAndACKMsg as theirRevokeAndAckMsg ->
-                let res, channelAferRevokeAndAck =
-                    let channelCmd = ChannelCommand.ApplyRevokeAndACK theirRevokeAndAckMsg
-                    channelAfterCommitmentSigned.ExecuteCommand channelCmd <| function
-                        | WeAcceptedRevokeAndACK(_)::[] -> Some ()
-                        | _ -> None
-                let connectedChannelAfterRevokeAndAck = {
+        match ourCommitmentSignedMsgOpt with 
+        | None -> return Ok self
+        | Some ourCommitmentSignedMsg ->
+            let! peerNodeAfterCommitmentSignedSent = peerNode.SendMsg ourCommitmentSignedMsg
+            
+            let! recvChannelMsgRes = peerNodeAfterCommitmentSignedSent.RecvChannelMsg()
+            match recvChannelMsgRes with
+            | Error (RecvMsg recvMsgError) -> return Error <| RecvRevokeAndAck recvMsgError
+            | Error (ReceivedPeerErrorMessage (peerNodeAfterRevokeAndAckReceived, errorMessage)) ->
+                let connectedChannelAfterError = {
                     connectedChannel with
                         PeerNode = peerNodeAfterRevokeAndAckReceived
-                        Channel = channelAferRevokeAndAck
+                        Channel = {
+                            Channel = channelAfterCommitmentSigned
+                        }
                 }
-                match res with
-                | Error err ->
-                    let! connectedChannelAfterErrorSent = connectedChannelAfterRevokeAndAck.SendError err.Message
-                    let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterErrorSent }
-                    return Error <| InvalidRevokeAndAck
-                        (brokenChannel, err)
-                | Ok () ->
-                    let channelPrivKeys = connectedChannel.Channel.ChannelPrivKeys
-                    let commitments = self.Commitments()
-                    let network = connectedChannel.Network
-                    let account = connectedChannel.Account
+                let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
+                return Error <| CommitmentSignedPeerErrorResponse
+                    (brokenChannel, errorMessage)
+            | Ok (peerNodeAfterRevokeAndAckReceived, channelMsg) ->
+                match channelMsg with
+                | :? RevokeAndACKMsg as theirRevokeAndAckMsg ->
+                    let channelAferRevokeAndAckRes =
+                        channelAfterCommitmentSigned.ApplyRevokeAndACK theirRevokeAndAckMsg
 
-                    let perCommitmentSecret = theirRevokeAndAckMsg.PerCommitmentSecret
-
-                    let breachStore = BreachDataStore account
-                    let! breachData =
-                            breachStore
-                                .LoadBreachData(connectedChannel.ChannelId)
-                                .InsertRevokedCommitment perCommitmentSecret
-                                                         commitments
-                                                         channelPrivKeys
-                                                         network
-                                                         account
-                    breachStore.SaveBreachData breachData
-
-                    do! TowerClient.Default.CreateAndSendPunishmentTx perCommitmentSecret
-                              commitments
-                              channelPrivKeys
-                              network
-                              account
-                              true
-
-                    connectedChannelAfterRevokeAndAck.SaveToWallet()
-                    let activeChannel = { ConnectedChannel = connectedChannelAfterRevokeAndAck }
-                    return Ok activeChannel
-            | _ -> return Error <| ExpectedRevokeAndAck channelMsg
+                    match channelAferRevokeAndAckRes with
+                    | Error err ->
+                        let connectedChannelAfterError = {
+                            connectedChannel with
+                                PeerNode = peerNodeAfterRevokeAndAckReceived
+                                Channel = {
+                                    Channel = channelAfterCommitmentSigned
+                                }
+                        }
+                        let! connectedChannelAfterErrorSent = connectedChannelAfterError.SendError err.Message
+                        let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterErrorSent }
+                        return Error <| InvalidRevokeAndAck
+                            (brokenChannel, err)
+                    | Ok channelAferRevokeAndAck ->
+                        let connectedChannelAfterRevokeAndAck = {
+                            connectedChannel with
+                                PeerNode = peerNodeAfterRevokeAndAckReceived
+                                Channel = {
+                                    Channel = channelAferRevokeAndAck
+                                }
+                        }
+                        let channelPrivKeys = connectedChannelAfterRevokeAndAck.Channel.ChannelPrivKeys
+                        let commitments = self.Commitments()
+                        let network = connectedChannelAfterRevokeAndAck.Network
+                        let account = connectedChannelAfterRevokeAndAck.Account
+            
+                        let perCommitmentSecret = theirRevokeAndAckMsg.PerCommitmentSecret
+            
+                        let breachStore = BreachDataStore account
+                        let! breachData =
+                                breachStore
+                                    .LoadBreachData(connectedChannelAfterRevokeAndAck.ChannelId)
+                                    .InsertRevokedCommitment perCommitmentSecret
+                                                                commitments
+                                                                channelPrivKeys
+                                                                network
+                                                                account
+                        breachStore.SaveBreachData breachData
+            
+                        do! TowerClient.Default.CreateAndSendPunishmentTx perCommitmentSecret
+                                    commitments
+                                    channelPrivKeys
+                                    network
+                                    account
+                                    true
+            
+                        connectedChannelAfterRevokeAndAck.SaveToWallet()
+                        let activeChannel = { ConnectedChannel = connectedChannelAfterRevokeAndAck }
+                        return Ok activeChannel
+                | _ -> return Error <| ExpectedRevokeAndAck channelMsg
+        
     }
 
     member private self.RecvCommit(): Async<Result<ActiveChannel, RecvCommitError>> = async {
@@ -518,29 +527,28 @@ and internal ActiveChannel =
         | Ok (peerNodeAfterCommitmentSignedReceived, channelMsg) ->
             match channelMsg with
             | :? CommitmentSignedMsg as theirCommitmentSignedMsg ->
-                let ourRevokeAndAckMsgRes, channelAfterCommitmentSigned =
-                    let channelCmd = ChannelCommand.ApplyCommitmentSigned theirCommitmentSignedMsg
-                    channel.ExecuteCommand channelCmd <| function
-                        | WeAcceptedCommitmentSigned(msg, _)::[] -> Some msg
-                        | _ -> None
-                match ourRevokeAndAckMsgRes with
+                let ourRevokeAndAckMsgAndChannelRes=
+                    channel.Channel.ApplyCommitmentSigned theirCommitmentSignedMsg
+                match ourRevokeAndAckMsgAndChannelRes with
                 | Error err ->
                     let connectedChannelAfterError = {
                         connectedChannel with
                             PeerNode = peerNodeAfterCommitmentSignedReceived
-                            Channel = channelAfterCommitmentSigned
+                            Channel = channel
                     }
                     let! connectedChannelAfterErrorSent = connectedChannelAfterError.SendError err.Message
                     let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterErrorSent }
                     return Error <| InvalidCommitmentSigned
                         (brokenChannel, err)
-                | Ok ourRevokeAndAckMsg ->
+                | Ok (channelAfterCommitmentSigned, ourRevokeAndAckMsg) ->
                     let! peerNodeAfterRevokeAndAckSent = peerNodeAfterCommitmentSignedReceived.SendMsg ourRevokeAndAckMsg
 
                     let connectedChannelAfterRevokeAndAck = {
                         connectedChannel with
                             PeerNode = peerNodeAfterRevokeAndAckSent
-                            Channel = channelAfterCommitmentSigned
+                            Channel = {
+                                Channel = channelAfterCommitmentSigned
+                            }
                     }
                     connectedChannelAfterRevokeAndAck.SaveToWallet()
                     let activeChannel = { ConnectedChannel = connectedChannelAfterRevokeAndAck }
@@ -554,21 +562,20 @@ and internal ActiveChannel =
         let peerNode = connectedChannel.PeerNode
         let channel = connectedChannel.Channel
 
-        let monoHopUnidirectionalPaymentMsgRes, channelAfterMonoHopPayment =
-            let channelCmd = ChannelCommand.MonoHopUnidirectionalPayment { Amount = amount }
-            channel.ExecuteCommand channelCmd <| function
-                | WeAcceptedOperationMonoHopUnidirectionalPayment(msg, _)::[] -> Some msg
-                | _ -> None
-        match monoHopUnidirectionalPaymentMsgRes with
+        let monoHopUnidirectionalPaymentMsgAndChannelRes =
+            channel.Channel.MonoHopUnidirectionalPayment amount 
+        match monoHopUnidirectionalPaymentMsgAndChannelRes with
         | Error (InvalidMonoHopUnidirectionalPayment err) ->
             return Error <| SendMonoHopPaymentError.InvalidMonoHopPayment (self, err)
         | Error err -> return failwith <| SPrintF1 "error executing mono hop payment command: %s" err.Message
-        | Ok monoHopUnidirectionalPaymentMsg ->
+        | Ok (channelAfterMonoHopPayment, monoHopUnidirectionalPaymentMsg) ->
             let! peerNodeAfterMonoHopPaymentSent = peerNode.SendMsg monoHopUnidirectionalPaymentMsg
             let connectedChannelAfterMonoHopPaymentSent = {
                 connectedChannel with
                     PeerNode = peerNodeAfterMonoHopPaymentSent
-                    Channel = channelAfterMonoHopPayment
+                    Channel = {
+                        Channel = channelAfterMonoHopPayment
+                    }
             }
             connectedChannelAfterMonoHopPaymentSent.SaveToWallet()
             let activeChannel = { ConnectedChannel = connectedChannelAfterMonoHopPaymentSent }
@@ -588,25 +595,27 @@ and internal ActiveChannel =
         let connectedChannel = self.ConnectedChannel
         let channelWrapper = connectedChannel.Channel
 
-        let res, channelWrapperAfterMonoHopPaymentReceived =
-            let channelCmd =
-                ChannelCommand.ApplyMonoHopUnidirectionalPayment
-                    monoHopUnidirectionalPaymentMsg
-            channelWrapper.ExecuteCommand channelCmd <| function
-            | (WeAcceptedMonoHopUnidirectionalPayment _) :: [] -> Some ()
-            | _ -> None
+        let channelAfterMonoHopPaymentReceivedRes =
+            channelWrapper.Channel.ApplyMonoHopUnidirectionalPayment
+                monoHopUnidirectionalPaymentMsg
 
-        let connectedChannelAfterMonoHopPaymentReceived =
-            { connectedChannel with
-                Channel = channelWrapperAfterMonoHopPaymentReceived
-            }
-
-        match res with
+        match channelAfterMonoHopPaymentReceivedRes with
         | Error err ->
-            let! connectedChannelAfterError = connectedChannelAfterMonoHopPaymentReceived.SendError err.Message
+            let connectedChannelAfterErrorReceived =
+                { connectedChannel with
+                    Channel = channelWrapper
+                }
+            let! connectedChannelAfterError = connectedChannelAfterErrorReceived.SendError err.Message
             let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
             return Error <| InvalidMonoHopPayment (brokenChannel, err)
-        | Ok () ->
+        | Ok channelAfterMonoHopPaymentReceived ->
+            let connectedChannelAfterMonoHopPaymentReceived =
+                { connectedChannel with
+                    Channel = {
+                        Channel = channelAfterMonoHopPaymentReceived
+                    }
+                }
+
             connectedChannelAfterMonoHopPaymentReceived.SaveToWallet()
             let activeChannel = { ConnectedChannel = connectedChannelAfterMonoHopPaymentReceived }
             let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
