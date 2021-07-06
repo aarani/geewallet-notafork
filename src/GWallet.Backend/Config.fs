@@ -12,6 +12,8 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 // TODO: make internal when tests don't depend on this anymore
 module Config =
 
+    let mutable BitcoinRegTestServerIP = null
+
     type internal RunMode =
         | Normal
         | Testing of DirectoryInfo
@@ -23,8 +25,9 @@ module Config =
 #endif
         RunMode.Normal
 
-    let public SetRunModeToTesting() =
+    let public SetRunModeToTesting(ip: string) =
 #if DEBUG
+        BitcoinRegTestServerIP <- ip
         if runMode <> RunMode.Normal then
             failwith "Cannot set RunMode more than once"
         let testDir = DirectoryInfo <| Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())

@@ -39,8 +39,8 @@ type ElectrumServer =
             let args =
                 (SPrintF4
                     "\
-                    --db-dir %s \
-                    --daemon-dir %s \
+                    --db-dir \"%s\" \
+                    --daemon-dir \"%s\" \
                     --network regtest \
                     --electrum-rpc-addr %s \
                     --daemon-rpc-addr %s \

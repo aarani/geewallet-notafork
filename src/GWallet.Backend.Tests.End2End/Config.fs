@@ -45,27 +45,9 @@ module Config =
 
     let ServerHostIP =
         if Environment.OSVersion.Platform <> PlatformID.Unix then
-            let (userName, password) = UnwrapOption CredentialsSecuredOpt "Missing WSL credentials."
-            let startInfo = 
-                ProcessStartInfo (
-                    UseShellExecute = false,
-                    FileName = "wsl.exe",
-                    Arguments = "cat /etc/resolv.conf",
-                    RedirectStandardOutput = true,
-                    UserName = userName,
-                    Password = password)
-            use proc = new Process (StartInfo = startInfo)
-            if proc.Start () then
-                let mutable nameServerLineOpt = None
-                while not proc.StandardOutput.EndOfStream do
-                    let line = proc.StandardOutput.ReadLine().Trim()
-                    if line.Length <> 0 && line.[0] <> '#' && (line.Split ' ').[0] = "nameserver" then
-                        nameServerLineOpt <- Some line
-                match nameServerLineOpt with
-                | Some nameServerLine -> (nameServerLine.Split ' ').[1]
-                | None -> LocalHostIP
-            else LocalHostIP
-        else LocalHostIP
+            GlobalIP
+        else 
+            LocalHostIP
 
     let ServerHost2IP = // TODO: see if we can give this a better name.
         if Environment.OSVersion.Platform <> PlatformID.Unix then
@@ -95,7 +77,7 @@ module Config =
     let BitcoindZeromqPublishRawBlockAddress = "127.0.0.1:28332"
     let BitcoindZeromqPublishRawTxAddress = "127.0.0.1:28333"
 
-    let ElectrumIP = if Environment.OSVersion.Platform <> PlatformID.Unix then ServerHost2IP else "[::1]"
+    let ElectrumIP = if Environment.OSVersion.Platform <> PlatformID.Unix then "0.0.0.0" else "[::1]"
     let ElectrumPort = "50001"
     let ElectrumRpcAddress = ElectrumIP + ":" + ElectrumPort
 
@@ -117,7 +99,7 @@ module Config =
         new Key (uint256.Parse("9d1ee30acb68716ed5f4e25b3c052c6078f1813f45d33a47e46615bfd05fa6fe").ToBytes())
 
     let FundeeLightningIPEndpoint =
-        IPEndPoint (IPAddress.Parse LightningIP, Int32.Parse LightningPort)
+        IPEndPoint (IPAddress.Parse LightningIP, Int32.Parse "9734")
 
     let FundeeNodeEndpoint =
         let extKey = FundeeAccountsPrivateKey.ToBytes() |> ExtKey
@@ -130,9 +112,4 @@ module Config =
                 (FundeeLightningIPEndpoint.Address.ToString())
                 FundeeLightningIPEndpoint.Port
             )
-
-    // HACK: inject WslHostIP into BitcointRegTestServerIP on Windows.
-    // This is a very ugly hack that we're currently forced into since MainCache is a singleton
-    // whose instantiation can not be controlled directly.
-    do ServerRegistry.BitcoinRegTestServerIP <-
-        if Environment.OSVersion.Platform <> PlatformID.Unix then ServerHost2IP else "::1"
+        

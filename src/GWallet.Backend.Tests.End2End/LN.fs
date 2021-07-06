@@ -21,7 +21,9 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 
 [<TestFixture>]
 type LN() =
-    do Config.SetRunModeToTesting()
+    do 
+        let ip = if Environment.OSVersion.Platform <> PlatformID.Unix then Config.ServerHost2IP else "::1"
+        Config.SetRunModeToTesting(ip)
 
     let walletToWalletTestPayment1Amount = Money (0.01m, MoneyUnit.BTC)
     let walletToWalletTestPayment2Amount = Money (0.015m, MoneyUnit.BTC)

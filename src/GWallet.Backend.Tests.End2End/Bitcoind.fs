@@ -57,7 +57,7 @@ type Bitcoind =
                 let dataDirTail = dataDir.Substring 1
                 "/mnt/" + dataDirHead + dataDirTail.Replace("\\", "/").Replace(":", "")
             else dataDir
-        let args = SPrintF1 "-regtest -datadir=%s" dataDirMnt
+        let args = SPrintF1 "-regtest -datadir=\"%s\"" dataDirMnt
         let xprocess = XProcess.Start "bitcoind" args Map.empty
 
         // skip to init message
@@ -80,7 +80,7 @@ type Bitcoind =
         let bitcoinCli =
             XProcess.Start
                 "bitcoin-cli"
-                (SPrintF3 "-regtest -datadir=%s generatetoaddress %i %s" self.DataDirMnt number.Value (string address))
+                (SPrintF3 "-regtest -datadir=\"%s\" generatetoaddress %i %s" self.DataDirMnt number.Value (string address))
                 Map.empty
         XProcess.WaitForExit false bitcoinCli
 
@@ -94,7 +94,7 @@ type Bitcoind =
         let bitcoinCli =
             XProcess.Start
                 "bitcoin-cli"
-                (SPrintF1 "-regtest -datadir=%s getrawmempool" self.DataDirMnt)
+                (SPrintF1 "-regtest -datadir=\"%s\" getrawmempool" self.DataDirMnt)
                 Map.empty
         let lines = XProcess.ReadMessages bitcoinCli
         let output = String.concat "\n" lines

@@ -36,10 +36,7 @@ type Lnd =
         Directory.CreateDirectory lndDir |> ignore
 
         // start LND server process
-        let lndProcessName =
-            if Environment.OSVersion.Platform <> PlatformID.Unix
-            then "$HOME/go/bin/lnd" // HACK: explicitly qualify path on windows until we figure out how to update $PATH in unit test!
-            else "lnd"
+        let lndProcessName = "lnd"
         let lndDirMnt = // TODO: extract this out to a function.
             if lndDir.Contains ":" then
                 let lndDirHead = lndDir.[0].ToString().ToLower()
@@ -51,12 +48,12 @@ type Lnd =
             + " --bitcoin.active"
             + " --bitcoin.regtest"
             + " --bitcoin.node=bitcoind"
-            + " --bitcoind.dir=" + bitcoind.DataDirMnt
+            + " --bitcoind.dir=\"" + bitcoind.DataDirMnt + "\""
             + " --bitcoind.rpchost=" + Config.BitcoindRpcAddress
             + " --debuglevel=trace"
             + " --listen=" + Config.LndListenIP
             + " --restlisten=" + Config.LndRestListenAddress
-            + " --lnddir=" + lndDirMnt
+            + " --lnddir=\"" + lndDirMnt + "\""
         let xprocess = XProcess.Start lndProcessName args Map.empty
 
         // skip to server init message
