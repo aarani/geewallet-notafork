@@ -72,7 +72,7 @@ type internal OutgoingUnfundedChannel =
         let defaultFinalScriptPubKey = ScriptManager.CreatePayoutScript account
         let localParams =
             let funding = Money(channelCapacity.ValueToSend, MoneyUnit.BTC)
-            Settings.GetLocalParams funding
+            Settings.GetLocalParams funding currency
         let temporaryChannelId = ChannelIdentifier.NewRandom()
         let feeRate =
             (feeEstimator :> IFeeEstimator).GetEstSatPer1000Weight ConfirmationTarget.Normal

@@ -182,7 +182,7 @@ type internal FundedChannel =
                     let network = UtxoCoin.Account.GetNetwork currency
                     let localParams =
                         let funding = openChannelMsg.FundingSatoshis
-                        Settings.GetLocalParams funding
+                        Settings.GetLocalParams funding currency
                     let fundingTxMinimumDepth =
                         MonoHopUnidirectionalChannel.DefaultFundingTxMinimumDepth
                     return Channel.NewInbound(

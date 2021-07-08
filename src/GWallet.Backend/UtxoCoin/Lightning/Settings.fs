@@ -29,12 +29,20 @@ module Settings =
         MaxMinimumDepth = BlockHeightOffset32 UInt32.MaxValue
     }
 
-    let private SupportedFeatures =
+    let private SupportedFeatures (funding: Money) (currency: Currency) =
         let featureBits = FeatureBits.Zero
         featureBits.SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true
+        if currency = Currency.LTC then
+            let featureType =
+                if funding > ChannelConstants.MAX_FUNDING_SATOSHIS then
+                    FeaturesSupport.Mandatory
+                else
+                    FeaturesSupport.Optional
+
+            featureBits.SetFeature Feature.OptionSupportLargeChannel featureType true
         featureBits
 
-    let internal GetLocalParams (funding: Money)
+    let internal GetLocalParams (funding: Money) (currency: Currency)
                                     : LocalParams =
         {
             DustLimitSatoshis = Money 200UL
@@ -43,5 +51,5 @@ module Settings =
             HTLCMinimumMSat = LNMoney 1000L
             ToSelfDelay = BlockHeightOffset16 6us
             MaxAcceptedHTLCs = uint16 10
-            Features = SupportedFeatures
+            Features = SupportedFeatures funding currency
         }

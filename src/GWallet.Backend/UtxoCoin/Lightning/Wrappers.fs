@@ -132,9 +132,9 @@ type MonoHopUnidirectionalChannel =
             DnlTxId = DotNetLightning.Utils.TxId self.FundingScriptCoin.Outpoint.Hash
         }
 
-    member internal self.LocalParams (funding: Money)
+    member internal self.LocalParams (funding: Money) (currency: Currency)
                                          : LocalParams =
-        Settings.GetLocalParams funding
+        Settings.GetLocalParams funding currency
 
     member internal self.Balance(): LNMoney =
         self.Channel.SavedChannelState.LocalCommit.Spec.ToLocal
