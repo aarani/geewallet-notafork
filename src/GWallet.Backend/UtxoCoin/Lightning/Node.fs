@@ -275,7 +275,8 @@ module public Connection =
             let bytes: array<byte> = Array.zeroCreate 32
             use bytesStream = new MemoryStream(bytes)
             let stream = NBitcoin.BitcoinStream(bytesStream, true)
-            privateKey.ReadWrite stream
+            let privateKeyBytes = privateKey.ToBytes()
+            stream.ReadWrite (ref privateKeyBytes)
             NBitcoin.ExtKey.CreateFromSeed bytes
         let transportListener = TransportListener.Bind secretKey bindAddress
         new Node (channelStore, transportListener)
