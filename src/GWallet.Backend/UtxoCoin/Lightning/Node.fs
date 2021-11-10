@@ -104,7 +104,8 @@ type Node internal (channelStore: ChannelStore, transportListener: TransportList
         let bytes: array<byte> = Array.zeroCreate privateKeyBytesLength
         use bytesStream = new MemoryStream (bytes)
         let stream = NBitcoin.BitcoinStream (bytesStream, true)
-        accountKey.ReadWrite stream
+        let accountKeyBytes = accountKey.ToBytes()
+        stream.ReadWrite (ref accountKeyBytes)
         NBitcoin.ExtKey.CreateFromSeed bytes
 
     member internal self.OpenChannel (nodeEndPoint: NodeEndPoint)
