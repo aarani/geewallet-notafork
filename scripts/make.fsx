@@ -226,7 +226,7 @@ let RunFrontend (buildConfig: BinaryConfig) (maybeArgs: Option<string>) =
 let RunTests (suite: string) =
     let findTestAssembly theSuite =
         let testAssemblyName = sprintf "GWallet.Backend.Tests.%s" theSuite
-        let testAssembly = Path.Combine(rootDir.FullName, "src", testAssemblyName, "bin",
+        let testAssembly = Path.Combine(FsxHelper.RootDir.FullName, "src", testAssemblyName, "bin",
                                         testAssemblyName + ".dll") |> FileInfo
         if not testAssembly.Exists then
             failwithf "File not found: %s" testAssembly.FullName
