@@ -262,16 +262,16 @@ let RunTests (suite: string) =
             if not FsxHelper.NugetExe.Exists then
                 MakeAll None |> ignore
 
+            let nunitVersion = "2.7.1"
             let runnerExe =
                 Path.Combine (
-                    nugetPackagesSubDirName,
+                    FsxHelper.NugetScriptsPackagesDir().FullName,
                     sprintf "NUnit.Runners.%s" nunitVersion,
                     "tools",
                     "nunit-console.exe"
                 ) |> FileInfo
 
             if not runnerExe.Exists then
-                let nunitVersion = "2.7.1"
                 let installNUnitRunnerNugetCommand =
                     sprintf
                         "install NUnit.Runners -Version %s -OutputDirectory %s"
