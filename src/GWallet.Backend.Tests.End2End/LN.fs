@@ -407,8 +407,9 @@ type WalletInstance private (password: string, channelStore: ChannelStore, node:
         let bytes: array<byte> = Array.zeroCreate privateKeyBytesLength
         use bytesStream = new MemoryStream (bytes)
         let stream = NBitcoin.BitcoinStream (bytesStream, true)
-        accountKey.ReadWrite stream
-        NBitcoin.ExtKey bytes
+        let accountKeyBytes = accountKey.ToBytes()
+        stream.ReadWrite (ref accountKeyBytes)
+        NBitcoin.ExtKey.CreateFromSeed bytes
 
     static member private FundeePubKey =
         let privateKey = (new Key(WalletInstance.FundeePrivateKey))
