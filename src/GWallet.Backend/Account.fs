@@ -304,6 +304,22 @@ module Account =
             }
         Async.Parallel checkJobs
 
+    let CheckAccountPassword (account: NormalAccount) (password: string) =
+        if (account :> IAccount).Currency.IsEtherBased() then
+            try
+                Ether.Account.CheckValidPassword account password
+                true
+            with
+            | :? InvalidPassword ->
+                false
+        else
+            try
+                UtxoCoin.Account.CheckValidPassword account password
+                true
+            with
+            | :? InvalidPassword ->
+                false
+
     let private CreateArchivedAccount (currency: Currency) (unencryptedPrivateKey: string): ArchivedAccount =
         let fromUnencryptedPrivateKeyToPublicAddressFunc =
             if currency.IsUtxo() then
