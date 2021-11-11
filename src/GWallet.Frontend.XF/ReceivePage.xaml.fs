@@ -16,8 +16,7 @@ type ReceivePage(account: IAccount,
                  // FIXME: should receive an Async<MaybeCached<decimal>> so that we get a fresh rate, just in case
                  usdRate: MaybeCached<decimal>,
 
-                 balancesPage: Page,
-                 balanceWidgetsFromBalancePage: BalanceWidgets) as this =
+                 balancesPage: Page) as this =
     inherit ContentPage()
     let _ = base.LoadFromXaml(typeof<ReceivePage>)
 
@@ -33,8 +32,7 @@ type ReceivePage(account: IAccount,
     [<Obsolete(DummyPageConstructorHelper.Warning)>]
     new() = ReceivePage(ReadOnlyAccount(Currency.BTC, { Name = "dummy"; Content = fun _ -> "" }, fun _ -> ""),
                         Fresh 0m,
-                        DummyPageConstructorHelper.PageFuncToRaiseExceptionIfUsedAtRuntime(),
-                        { CryptoLabel = null; FiatLabel = null ; Frame = null })
+                        DummyPageConstructorHelper.PageFuncToRaiseExceptionIfUsedAtRuntime())
 
     member this.Init() =
         let balanceLabel = mainLayout.FindByName<Label>("balanceLabel")
@@ -43,16 +41,6 @@ type ReceivePage(account: IAccount,
         let accountBalance =
             Caching.Instance.RetrieveLastCompoundBalance account.PublicAddress account.Currency
         FrontendHelpers.UpdateBalance (NotFresh accountBalance) account.Currency usdRate None balanceLabel fiatBalanceLabel
-            |> ignore
-
-        // this below is for the case when a new ReceivePage() instance is suddenly created after sending a transaction
-        // (we need to update the balance page ASAP in case the user goes back to it after sending the transaction)
-        FrontendHelpers.UpdateBalance (NotFresh accountBalance)
-                                      account.Currency
-                                      usdRate
-                                      (Some balanceWidgetsFromBalancePage.Frame)
-                                      balanceWidgetsFromBalancePage.CryptoLabel
-                                      balanceWidgetsFromBalancePage.FiatLabel
             |> ignore
 
         balanceLabel.FontSize <- FrontendHelpers.BigFontSize
@@ -106,7 +94,7 @@ type ReceivePage(account: IAccount,
 
     member this.OnSendPaymentClicked(sender: Object, args: EventArgs) =
         let newReceivePageFunc = (fun _ ->
-            ReceivePage(account, usdRate, balancesPage, balanceWidgetsFromBalancePage) :> Page
+            ReceivePage(account, usdRate, balancesPage) :> Page
         )
         let sendPage () =
             let newPage = SendPage(account, this, newReceivePageFunc)
