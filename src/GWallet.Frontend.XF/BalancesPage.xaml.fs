@@ -292,13 +292,14 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                 ) |> Some
         }
 
-    member private this.RefreshBalances (onlyReadOnlyAccounts: bool) =
+    member private this.RefreshBalances (onlyReadOnlyAccounts: bool) (tryCacheFirst: bool) =
         // we don't mind to be non-fast because it's refreshing in the background anyway
         let refreshMode = ServerSelectionMode.Analysis
 
         let readOnlyCancelSources,readOnlyBalancesJob =
             FrontendHelpers.UpdateBalancesAsync readOnlyAccountsBalanceSets
-                                                false refreshMode
+                                                tryCacheFirst
+                                                refreshMode
                                                 None
 
         let readOnlyAccountsBalanceUpdate =
@@ -309,7 +310,8 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
 
                 let normalCancelSources,normalBalancesJob =
                     FrontendHelpers.UpdateBalancesAsync normalAccountsBalanceSets
-                                                        false refreshMode
+                                                        tryCacheFirst
+                                                        refreshMode
                                                         None
 
                 let normalAccountsBalanceUpdate =
@@ -369,7 +371,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                 async {
                     try
                         cancellationToken.ThrowIfCancellationRequested()
-                        do! this.RefreshBalances false
+                        do! this.RefreshBalances false false
                         cancellationToken.ThrowIfCancellationRequested()
                         this.LastRefreshBalancesStamp <- DateTime.UtcNow,cancelSource
                         this.StartTimer()
@@ -499,6 +501,10 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             |> ignore
         this.BalanceRefreshCancelSources <- Seq.empty
 
+    override this.OnAppearing() =
+        base.OnAppearing()
+        this.RefreshBalances false true |> FrontendHelpers.DoubleCheckCompletionAsync false
+
     member private this.Init () =
         normalChartView.DefaultImageSource <- FrontendHelpers.GetSizedImageSource "logo" 512
         readonlyChartView.DefaultImageSource <- FrontendHelpers.GetSizedImageSource "logo" 512
@@ -528,7 +534,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             this.UpdateGlobalFiatBalanceSum allReadOnlyAccountFiatBalances totalReadOnlyFiatAmountLabel
         )
 
-        this.RefreshBalances true |> FrontendHelpers.DoubleCheckCompletionAsync false
+        this.RefreshBalances true false |> FrontendHelpers.DoubleCheckCompletionAsync false
         this.StartTimer()
 
         state.Resumed.Add (fun _ -> this.StartTimer())
