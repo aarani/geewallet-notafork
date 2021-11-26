@@ -1,7 +1,7 @@
 ﻿open System
 open System.IO
 open System.Linq
-open System.Text.RegularExpressions
+open System.Text
 
 open GWallet.Backend
 open GWallet.Frontend.Console
@@ -361,7 +361,7 @@ let rec PerformOperation (numActiveAccounts: uint32) (numHotAccounts: uint32) =
         let password = UserInteraction.AskPassword true
         Async.RunSynchronously <| async {
             let! privateKeyBytes = Async.AwaitTask masterPrivateKeyTask
-            return! Account.CreateAllAccounts privateKeyBytes password
+            return! Account.CreateAllAccounts privateKeyBytes password (Encoding.UTF8.GetBytes passphrase)
         }
         Console.WriteLine("Accounts created")
         UserInteraction.PressAnyKeyToContinue()

@@ -374,12 +374,9 @@ module Account =
 
     let internal GetPrivateKey (account: NormalAccount) password =
         let encryptedPrivateKey = account.GetEncryptedPrivateKey()
-        let encryptedSecret = BitcoinEncryptedSecretNoEC(encryptedPrivateKey, GetNetwork (account:>IAccount).Currency)
-        try
-            encryptedSecret.GetKey(password)
-        with
-        | :? SecurityException ->
-            raise (InvalidPassword)
+        KeyStoreUtils.Load encryptedPrivateKey password
+        |> fst
+        |> Key
 
     let internal SignTransaction (account: NormalUtxoAccount)
                                  (txMetadata: TransactionMetadata)
@@ -453,17 +450,14 @@ module Account =
                               account txMetadata destination.PublicAddress amount privateKey
         BroadcastRawTransaction currency (signedTrans.ToHex())
 
-    let internal Create currency (password: string) (seed: array<byte>): Async<FileRepresentation> =
+    let internal Create (seed: array<byte>) encryptedData: Async<FileRepresentation> =
         async {
             use privKey = new Key (seed)
-            let network = GetNetwork currency
-            let secret = privKey.GetBitcoinSecret network
-            let encryptedSecret = secret.PrivateKey.GetEncryptedBitcoinSecret(password, network)
-            let encryptedPrivateKey = encryptedSecret.ToWif()
-            let publicKey = secret.PubKey.ToString()
+            let publicKey = privKey.PubKey.ToString()
+   
             return {
                 Name = publicKey
-                Content = fun _ -> encryptedPrivateKey
+                Content = fun _ -> encryptedData
             }
         }
 
