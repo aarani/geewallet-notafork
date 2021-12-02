@@ -3,6 +3,7 @@
 open System
 open System.Linq
 open System.IO
+open System.Text
 open System.Threading.Tasks
 
 open GWallet.Backend.FSharpUtil.UwpHacks
@@ -446,31 +447,30 @@ module Account =
     let Remove (account: ReadOnlyAccount) =
         Config.RemoveReadOnlyAccount account
 
-    let private CreateConceptEtherAccountInternal (password: string) (seed: array<byte>)
+    let private CreateConceptEtherAccountInternal (seed: array<byte>)
                                                  : Async<FileRepresentation*(FileRepresentation->string)> =
         async {
-            let! virtualFile = Ether.Account.Create password seed
+            let! virtualFile = Ether.Account.Create seed
             return virtualFile, Ether.Account.GetPublicAddressFromNormalAccountFile
         }
 
-    let private CreateConceptAccountInternal (currency: Currency) (password: string) (seed: array<byte>)
+    let private CreateConceptAccountInternal (currency: Currency) (seed: array<byte>)
                                             : Async<FileRepresentation*(FileRepresentation->string)> =
         async {
             if currency.IsUtxo() then
-                let! virtualFile = UtxoCoin.Account.Create currency password seed
+                let! virtualFile = UtxoCoin.Account.Create seed
                 return virtualFile, UtxoCoin.Account.GetPublicAddressFromNormalAccountFile currency
             elif currency.IsEtherBased() then
-                return! CreateConceptEtherAccountInternal password seed
+                return! CreateConceptEtherAccountInternal seed
             else
                 return failwith <| SPrintF1 "Unknown currency %A" currency
         }
 
 
-    let CreateConceptAccount (currency: Currency) (password: string) (seed: array<byte>)
-                            : Async<ConceptAccount> =
+    let CreateConceptAccount (currency: Currency) (seed: array<byte>) : Async<ConceptAccount> =
         async {
             let! virtualFile, fromEncPrivKeyToPublicAddressFunc =
-                CreateConceptAccountInternal currency password seed
+                CreateConceptAccountInternal currency seed
             return {
                        Currency = currency;
                        FileRepresentation = virtualFile
@@ -478,19 +478,17 @@ module Account =
                    }
         }
 
-    let private CreateConceptAccountAux (currency: Currency) (password: string) (seed: array<byte>)
-                            : Async<List<ConceptAccount>> =
+    let private CreateConceptAccountAux (currency: Currency) (seed: array<byte>) : Async<List<ConceptAccount>> =
         async {
-            let! singleAccount = CreateConceptAccount currency password seed
+            let! singleAccount = CreateConceptAccount currency seed
             return singleAccount::List.Empty
         }
 
-    let CreateEtherNormalAccounts (password: string) (seed: array<byte>)
-                                      : Async<List<ConceptAccount>> =
+    let CreateEtherNormalAccounts (seed: array<byte>) : Async<List<ConceptAccount>> =
         let supportedEtherCurrencies = Currency.GetAll().Where(fun currency -> currency.IsEtherBased())
         let etherAccounts = async {
             let! virtualFile, fromEncPrivKeyToPublicAddressFunc =
-                CreateConceptEtherAccountInternal password seed
+                CreateConceptEtherAccountInternal seed
             return seq {
                 for etherCurrency in supportedEtherCurrencies do
                     yield {
@@ -515,16 +513,16 @@ module Account =
             return privateKeyBytes
         }
 
-    let CreateAllConceptAccounts (privateKeyBytes: array<byte>) (encryptionPassword: string)
+    let CreateAllConceptAccounts (privateKeyBytes: array<byte>)
                                      : Async<seq<ConceptAccount>> = async {
-        let etherAccounts = CreateEtherNormalAccounts encryptionPassword privateKeyBytes
+        let etherAccounts = CreateEtherNormalAccounts privateKeyBytes
         let nonEthCurrencies = Currency.GetAll().Where(fun currency -> not (currency.IsEtherBased()))
 
         let nonEtherAccounts: List<Async<List<ConceptAccount>>> =
             seq {
                 // TODO: figure out if we can reuse CPU computation of WIF creation between BTC&LTC
                 for nonEthCurrency in nonEthCurrencies do
-                    yield CreateConceptAccountAux nonEthCurrency encryptionPassword privateKeyBytes
+                    yield CreateConceptAccountAux nonEthCurrency privateKeyBytes
             } |> List.ofSeq
 
         let allAccounts = etherAccounts::nonEtherAccounts
@@ -541,8 +539,11 @@ module Account =
         return allConceptAccounts
     }
 
-    let CreateAllAccounts (privateKeyBytes: array<byte>) (encryptionPassword: string): Async<unit> = async {
-        let! allConceptAccounts = CreateAllConceptAccounts privateKeyBytes encryptionPassword
+    let CreateAllAccounts (privateKeyBytes: array<byte>) (encryptionPassword: string) (passphrase: string): Async<unit> = async {
+        SymmetricEncryptionManager.Save privateKeyBytes passphrase encryptionPassword
+        |> Config.SetEncryptedPrivateSecrets
+
+        let! allConceptAccounts = CreateAllConceptAccounts privateKeyBytes
         for conceptAccount in allConceptAccounts do
             CreateNormalAccount conceptAccount
             |> ignore<NormalAccount>
@@ -553,7 +554,7 @@ module Account =
                        (emailPartOfSalt: string) =
         async {
             let! masterPrivateKey = GenerateMasterPrivateKey passphrase dobPartOfSalt emailPartOfSalt
-            let! allConceptAccounts = CreateAllConceptAccounts masterPrivateKey (Guid.NewGuid().ToString())
+            let! allConceptAccounts = CreateAllConceptAccounts masterPrivateKey
             return allConceptAccounts.All(fun conceptAccount ->
                 GetAllActiveAccounts().Any(fun account ->
                     let publicAddressOfConceptAccount =
@@ -563,6 +564,36 @@ module Account =
                 )
             )
         }
+
+    let private RemoveAllNormalAccounts (): unit =
+        let normalAccounts = GetAllActiveAccounts().OfType<NormalAccount>()
+        for normalAccount in normalAccounts do
+            Config.RemoveNormalAccount normalAccount
+
+    let RecreateNormalAccounts
+        (passphrase: string)
+        (dobPartOfSalt: DateTime)
+        (emailPartOfSalt: string)
+        (password: string)
+        =
+        async {
+            RemoveAllNormalAccounts ()
+            let! masterPrivateKey = GenerateMasterPrivateKey passphrase dobPartOfSalt emailPartOfSalt
+            do! CreateAllAccounts masterPrivateKey password passphrase
+        }
+
+    let RevealRecoveryPhrase (password: string) =
+        match Config.GetEncryptedPrivateSecrets () with
+        | None ->
+            failwith "Recovery phrase is only accessible in newly created accounts"
+        | Some mainEncryptedPrivateKey ->
+            try
+                let _privKey, secretRecoveryPhrase = SymmetricEncryptionManager.Load mainEncryptedPrivateKey password
+                secretRecoveryPhrase
+            with
+            | :? System.Security.Cryptography.CryptographicException ->
+                raise InvalidPassword
+
 
     let WipeAll() =
         Config.Wipe()

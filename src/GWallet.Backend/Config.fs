@@ -171,3 +171,26 @@ module Config =
             failwith <| SPrintF1 "Embedded resource %s not found" resourceName
         use reader = new StreamReader(stream)
         reader.ReadToEnd()
+
+    let private GetConfigPathForEncryptedPrivateSecrets () =
+        Path.Combine (
+            GetConfigDirForAccounts().FullName,
+            "encryptedSecrets.json"
+        )
+        |> FileInfo
+
+    let GetEncryptedPrivateSecrets () =
+        let filePath = GetConfigPathForEncryptedPrivateSecrets ()
+
+        let fileExists = File.Exists filePath.FullName
+
+        if fileExists then
+            File.ReadAllText filePath.FullName
+            |> Some
+        else
+            None
+
+    let internal SetEncryptedPrivateSecrets (content: string) =
+        let filePath = GetConfigPathForEncryptedPrivateSecrets ()
+
+        File.WriteAllText (filePath.FullName, content)

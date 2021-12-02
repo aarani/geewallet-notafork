@@ -27,8 +27,13 @@ module internal Account =
         EthECKey(privateKey).GetPublicAddress()
 
     let internal GetPublicAddressFromNormalAccountFile (accountFile: FileRepresentation): string =
-        let encryptedPrivateKey = accountFile.Content()
-        let rawPublicAddress = KeyStoreService.GetAddressFromKeyStore encryptedPrivateKey
+        let rawPublicAddress =
+            let encryptedPrivateKey = accountFile.Content()
+            if encryptedPrivateKey <> String.Empty then
+                KeyStoreService.GetAddressFromKeyStore encryptedPrivateKey
+            else
+                accountFile.Name
+
         let publicAddress =
             if (rawPublicAddress.StartsWith("0x")) then
                 rawPublicAddress
@@ -227,13 +232,28 @@ module internal Account =
             trans.RawTransaction
 
     let internal GetPrivateKey (account: NormalAccount) password =
-        let encryptedPrivateKey = account.GetEncryptedPrivateKey()
         let privKeyInBytes =
-            try
-                KeyStoreService.DecryptKeyStoreFromJson(password, encryptedPrivateKey)
-            with
-            | :? DecryptionException ->
-                raise (InvalidPassword)
+            let encryptedPrivateKey = account.GetEncryptedPrivateKey()
+            if encryptedPrivateKey <> String.Empty then
+                try
+                    KeyStoreService.DecryptKeyStoreFromJson(password, encryptedPrivateKey)
+                with
+                | :? DecryptionException ->
+                    raise InvalidPassword
+            else
+                match Config.GetEncryptedPrivateSecrets () with
+                | Some mainEncryptedPrivateKey ->
+                    try
+                        let privKeyInBytes, _secretRecoveryPhrase =
+                            SymmetricEncryptionManager.Load
+                                mainEncryptedPrivateKey
+                                password
+                        privKeyInBytes
+                    with
+                    | :? System.Security.Cryptography.CryptographicException ->
+                        raise InvalidPassword
+                | None ->
+                    failwith "BUG: corrupted account file"
 
         EthECKey(privKeyInBytes, true)
 
@@ -376,26 +396,20 @@ module internal Account =
 
         BroadcastRawTransaction currency trans
 
-    let private CreateInternal (password: string) (seed: array<byte>): FileRepresentation =
+    let private CreateInternal (seed: array<byte>): FileRepresentation =
         let privateKey = EthECKey(seed, true)
         let publicAddress = privateKey.GetPublicAddress()
         if not (addressUtil.IsChecksumAddress(publicAddress)) then
             failwith ("Nethereum's GetPublicAddress gave a non-checksum address: " + publicAddress)
 
-        let accountSerializedJson =
-            KeyStoreService.EncryptAndGenerateDefaultKeyStoreAsJson(password,
-                                                                    seed,
-                                                                    publicAddress)
-        let fileNameForAccount = KeyStoreService.GenerateUTCFileName(publicAddress)
-
         {
-            Name = fileNameForAccount
-            Content = fun _ -> accountSerializedJson
+            Name = publicAddress
+            Content = fun _ -> String.Empty
         }
 
-    let Create (password: string) (seed: array<byte>): Async<FileRepresentation> =
+    let Create (seed: array<byte>) : Async<FileRepresentation> =
         async {
-            return CreateInternal password seed
+            return CreateInternal seed
         }
 
     let public ExportUnsignedTransactionToJson trans =

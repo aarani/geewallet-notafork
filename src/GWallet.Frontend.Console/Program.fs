@@ -1,6 +1,7 @@
 ﻿open System
 open System.IO
 open System.Linq
+open System.Text
 open System.Text.RegularExpressions
 
 open GWallet.Backend
@@ -292,6 +293,7 @@ type private GenericWalletOption =
     | Cancel
     | TestPaymentPassword
     | TestSeedPassphrase
+    | RevealRecoveryPhrase
     | WipeWallet
 
 let rec TestPaymentPassword () =
@@ -307,6 +309,22 @@ let rec TestSeedPassphrase(): unit =
     if not check then
         Console.WriteLine "Try again."
         TestSeedPassphrase()
+    else
+        Console.WriteLine "Success!"
+        let shouldSetNewPassword = UserInteraction.AskYesNo "Do you want to set a new payment password?"
+        if shouldSetNewPassword then
+            let newPassword = UserInteraction.AskPassword true
+            Account.RecreateNormalAccounts passphrase dob email newPassword |> Async.RunSynchronously
+
+let rec RevealRecoveryPhrase(): unit =
+    let password = UserInteraction.AskPassword false
+    try
+        let recoveryPhrase = Account.RevealRecoveryPhrase password
+        Console.WriteLine (sprintf "Your secret recovery phrase is: '%s' (without quotes)" recoveryPhrase)
+    with
+    | :? InvalidPassword ->
+        Console.WriteLine "Try again."
+        RevealRecoveryPhrase()
 
 let WipeWallet() =
     Console.WriteLine "If you want to remove accounts, the recommended way is to archive them, not wipe the whole wallet."
@@ -319,10 +337,15 @@ let WipeWallet() =
 
 let WalletOptions(): unit =
     let rec AskWalletOption(): GenericWalletOption =
+        let accountsLegacyFormat =
+            Config.GetEncryptedPrivateSecrets()
+            |> Option.isNone
         Console.WriteLine "0. Cancel, go back"
         Console.WriteLine "1. Check you still remember your payment password"
         Console.WriteLine "2. Check you still remember your secret recovery phrase"
         Console.WriteLine "3. Wipe your current wallet, in order to start from scratch"
+        if not accountsLegacyFormat then
+            Console.WriteLine "4. Reveal recovery phrase"
         Console.Write "Choose an option from the ones above: "
         let optIntroduced = Console.ReadLine ()
         match UInt32.TryParse optIntroduced with
@@ -333,6 +356,7 @@ let WalletOptions(): unit =
             | 1u -> GenericWalletOption.TestPaymentPassword
             | 2u -> GenericWalletOption.TestSeedPassphrase
             | 3u -> GenericWalletOption.WipeWallet
+            | 4u when not accountsLegacyFormat -> GenericWalletOption.RevealRecoveryPhrase
             | _ -> AskWalletOption()
 
     let walletOption = AskWalletOption()
@@ -342,7 +366,8 @@ let WalletOptions(): unit =
         Console.WriteLine "Success!"
     | GenericWalletOption.TestSeedPassphrase ->
         TestSeedPassphrase()
-        Console.WriteLine "Success!"
+    | GenericWalletOption.RevealRecoveryPhrase ->
+        RevealRecoveryPhrase()
     | GenericWalletOption.WipeWallet ->
         WipeWallet()
     | _ -> ()
@@ -361,7 +386,7 @@ let rec PerformOperation (numActiveAccounts: uint32) (numHotAccounts: uint32) =
         let password = UserInteraction.AskPassword true
         Async.RunSynchronously <| async {
             let! privateKeyBytes = Async.AwaitTask masterPrivateKeyTask
-            return! Account.CreateAllAccounts privateKeyBytes password
+            return! Account.CreateAllAccounts privateKeyBytes password passphrase
         }
         Console.WriteLine("Accounts created")
         UserInteraction.PressAnyKeyToContinue()
