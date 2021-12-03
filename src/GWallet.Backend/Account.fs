@@ -83,7 +83,10 @@ module Account =
             let firstUtxoAccountFile = utxoCurrencyAccountFiles.First()
             let utxoCoinPublicKey = UtxoCoin.Account.GetPublicKeyFromNormalAccountFile firstUtxoAccountFile
             let firstEtherAccountFile = etherCurrencyAccountFiles.First()
-            let etherPublicAddress = Ether.Account.GetPublicAddressFromNormalAccountFile firstEtherAccountFile
+            let etherPublicAddress =
+                Ether.Account.GetPublicAddressFromNormalAccountFile
+                    (Config.GetEncryptedPrivateSecrets().IsSome)
+                    firstEtherAccountFile
             Some {
                 UtxoCoinPublicKey = utxoCoinPublicKey.ToString()
                 EtherPublicAddress = etherPublicAddress
@@ -451,7 +454,7 @@ module Account =
                                                  : Async<FileRepresentation*(FileRepresentation->string)> =
         async {
             let! virtualFile = Ether.Account.Create seed
-            return virtualFile, Ether.Account.GetPublicAddressFromNormalAccountFile
+            return virtualFile, Ether.Account.GetPublicAddressFromNormalAccountFile true
         }
 
     let private CreateConceptAccountInternal (currency: Currency) (seed: array<byte>)

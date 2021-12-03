@@ -26,13 +26,16 @@ module internal Account =
     let GetPublicAddressFromUnencryptedPrivateKey (privateKey: string) =
         EthECKey(privateKey).GetPublicAddress()
 
-    let internal GetPublicAddressFromNormalAccountFile (accountFile: FileRepresentation): string =
+    let internal GetPublicAddressFromNormalAccountFile (forceNewVersion: bool) (accountFile: FileRepresentation): string =
         let rawPublicAddress =
-            let encryptedPrivateKey = accountFile.Content()
-            if encryptedPrivateKey <> String.Empty then
-                KeyStoreService.GetAddressFromKeyStore encryptedPrivateKey
-            else
+            if forceNewVersion then
                 accountFile.Name
+            else
+                let encryptedPrivateKey = accountFile.Content()
+                if not (String.IsNullOrWhiteSpace encryptedPrivateKey) then
+                    KeyStoreService.GetAddressFromKeyStore encryptedPrivateKey
+                else
+                    failwith "BUG: account file is empty and the main account json doesn't exist"
 
         let publicAddress =
             if (rawPublicAddress.StartsWith("0x")) then
@@ -48,7 +51,7 @@ module internal Account =
         | AccountKind.ReadOnly ->
             ReadOnlyAccount(currency, accountFile, fun accountFile -> accountFile.Name) :> IAccount
         | AccountKind.Normal ->
-            NormalAccount(currency, accountFile, GetPublicAddressFromNormalAccountFile) :> IAccount
+            NormalAccount(currency, accountFile, GetPublicAddressFromNormalAccountFile (Config.GetEncryptedPrivateSecrets().IsSome)) :> IAccount
         | _ ->
             failwith <| SPrintF1 "Kind (%A) not supported for this API" kind
 
