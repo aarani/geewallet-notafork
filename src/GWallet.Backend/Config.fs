@@ -10,6 +10,10 @@ open Newtonsoft.Json
 
 open GWallet.Backend.FSharpUtil.UwpHacks
 
+type StoredEncryptedSeedInfo =
+    | Value of SymmetricEncryptionManager.EncryptedSeedInfo
+    | Legacy
+
 // TODO: make internal when tests don't depend on this anymore
 module Config =
 
@@ -188,10 +192,11 @@ module Config =
         if fileExists then
             let encryptedInfo = File.ReadAllText filePath.FullName
 
-            JsonConvert.DeserializeObject<SymmetricEncryptionManager.EncryptedSeedInfo> encryptedInfo
-            |> Some
+            JsonConvert.DeserializeObject<SymmetricEncryptionManager.EncryptedSeedInfo>
+                encryptedInfo
+            |> StoredEncryptedSeedInfo.Value
         else
-            None
+            StoredEncryptedSeedInfo.Legacy
 
     let internal SetEncryptedPrivateSecrets (content: string) =
         let filePath = GetConfigPathForEncryptedPrivateSecrets ()

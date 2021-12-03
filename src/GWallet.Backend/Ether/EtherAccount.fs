@@ -55,7 +55,7 @@ module internal Account =
                 currency,
                 accountFile,
                 GetPublicAddressFromNormalAccountFile
-                    (Config.GetEncryptedPrivateSecrets().IsNone)
+                    (Config.GetEncryptedPrivateSecrets() = StoredEncryptedSeedInfo.Legacy)
             ) :> IAccount
         | _ ->
             failwith <| SPrintF1 "Kind (%A) not supported for this API" kind
@@ -242,7 +242,7 @@ module internal Account =
     let internal GetPrivateKey (account: NormalAccount) password =
         let privKeyInBytes =
             match Config.GetEncryptedPrivateSecrets () with
-            | None ->
+            | Legacy ->
                 let encryptedPrivateKey = account.GetEncryptedPrivateKey()
                 if not (String.IsNullOrWhiteSpace encryptedPrivateKey) then
                     try
@@ -252,7 +252,7 @@ module internal Account =
                         raise InvalidPassword
                 else
                     failwith "BUG: account content is empty and the main account json doesn't exist"
-            | Some encryptedSeedInfo ->
+            | Value encryptedSeedInfo ->
                 try
                     let privKeyInBytes, _secretRecoveryPhrase =
                         SymmetricEncryptionManager.Load

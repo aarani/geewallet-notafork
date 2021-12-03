@@ -85,7 +85,7 @@ module Account =
             let firstEtherAccountFile = etherCurrencyAccountFiles.First()
             let etherPublicAddress =
                 Ether.Account.GetPublicAddressFromNormalAccountFile
-                    (Config.GetEncryptedPrivateSecrets().IsNone)
+                    (Config.GetEncryptedPrivateSecrets() = StoredEncryptedSeedInfo.Legacy)
                     firstEtherAccountFile
             Some {
                 UtxoCoinPublicKey = utxoCoinPublicKey.ToString()
@@ -587,9 +587,9 @@ module Account =
 
     let RevealRecoveryPhrase (password: string) =
         match Config.GetEncryptedPrivateSecrets () with
-        | None ->
+        | Legacy ->
             failwith "Recovery phrase is only accessible in newly created accounts"
-        | Some encryptedSeedInfo ->
+        | Value encryptedSeedInfo ->
             try
                 let _privKey, secretRecoveryPhrase = SymmetricEncryptionManager.Load encryptedSeedInfo password
                 secretRecoveryPhrase

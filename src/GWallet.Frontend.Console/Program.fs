@@ -338,8 +338,7 @@ let WipeWallet() =
 let WalletOptions(): unit =
     let rec AskWalletOption(): GenericWalletOption =
         let accountsLegacyFormat =
-            Config.GetEncryptedPrivateSecrets()
-            |> Option.isNone
+            Config.GetEncryptedPrivateSecrets() = StoredEncryptedSeedInfo.Legacy
         Console.WriteLine "0. Cancel, go back"
         Console.WriteLine "1. Check you still remember your payment password"
         Console.WriteLine "2. Check you still remember your secret recovery phrase"

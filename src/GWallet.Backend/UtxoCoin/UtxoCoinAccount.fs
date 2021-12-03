@@ -374,7 +374,7 @@ module Account =
 
     let internal GetPrivateKey (account: NormalAccount) password =
         match Config.GetEncryptedPrivateSecrets () with
-        | None ->
+        | Legacy ->
             let encryptedPrivateKey = account.GetEncryptedPrivateKey()
             if not (String.IsNullOrWhiteSpace encryptedPrivateKey) then
                 let encryptedSecret = BitcoinEncryptedSecretNoEC(encryptedPrivateKey, GetNetwork (account:>IAccount).Currency)
@@ -385,7 +385,7 @@ module Account =
                     raise InvalidPassword
             else
                 failwith "BUG: account file is empty and the main account json doesn't exist"
-        | Some encryptedSeedInfo ->
+        | Value encryptedSeedInfo ->
             try
                 let privKey, _secretRecoveryPhrase =
                     SymmetricEncryptionManager.Load
