@@ -26,9 +26,9 @@ module internal Account =
     let GetPublicAddressFromUnencryptedPrivateKey (privateKey: string) =
         EthECKey(privateKey).GetPublicAddress()
 
-    let internal GetPublicAddressFromNormalAccountFile (forceNewVersion: bool) (accountFile: FileRepresentation): string =
+    let internal GetPublicAddressFromNormalAccountFile (legacyAccountFormat: bool) (accountFile: FileRepresentation): string =
         let rawPublicAddress =
-            if forceNewVersion then
+            if not legacyAccountFormat then
                 accountFile.Name
             else
                 let encryptedPrivateKey = accountFile.Content()
@@ -51,7 +51,12 @@ module internal Account =
         | AccountKind.ReadOnly ->
             ReadOnlyAccount(currency, accountFile, fun accountFile -> accountFile.Name) :> IAccount
         | AccountKind.Normal ->
-            NormalAccount(currency, accountFile, GetPublicAddressFromNormalAccountFile (Config.GetEncryptedPrivateSecrets().IsSome)) :> IAccount
+            NormalAccount(
+                currency,
+                accountFile,
+                GetPublicAddressFromNormalAccountFile
+                    (Config.GetEncryptedPrivateSecrets().IsNone)
+            ) :> IAccount
         | _ ->
             failwith <| SPrintF1 "Kind (%A) not supported for this API" kind
 
