@@ -45,16 +45,13 @@ module SymmetricEncryptionManager =
         }
         |> JsonConvert.SerializeObject
 
-    let private Decrypt (encryptedInfo: string) (password: string) =
+    let private Decrypt (encryptedInfo: EncryptedSeedInfo) (password: string) =
         let passwordBytes = Encoding.UTF8.GetBytes password
 
         let encryptedData, decryptionIv = 
-            let encryptedInfoObj =
-                JsonConvert.DeserializeObject<EncryptedSeedInfo> encryptedInfo
-
-            encryptedInfoObj.CipherText
+            encryptedInfo.CipherText
             |> Convert.FromBase64String,
-            encryptedInfoObj.DecryptionIV 
+            encryptedInfo.DecryptionIV
             |> Convert.FromBase64String
 
         use aes =
@@ -81,7 +78,7 @@ module SymmetricEncryptionManager =
 
         Encrypt seedInfoJson password
 
-    let Load (fileContent: string) (password: string) =
+    let Load (encryptedSeedInfo: EncryptedSeedInfo) (password: string) =
         //FIXME:
         //  There is a chance that aes decryption with invalid key
         //  don't throw CryptographicException, we might need to look
@@ -89,6 +86,6 @@ module SymmetricEncryptionManager =
         //  plaintext is correct
         let seedInfo =
             JsonConvert.DeserializeObject<PrivateSeedInfo>
-                (Decrypt fileContent password)
+                (Decrypt encryptedSeedInfo password)
         seedInfo.PrivateKey |> Convert.FromBase64String,
         seedInfo.RecoveryPhrase

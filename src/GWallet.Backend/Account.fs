@@ -589,9 +589,9 @@ module Account =
         match Config.GetEncryptedPrivateSecrets () with
         | None ->
             failwith "Recovery phrase is only accessible in newly created accounts"
-        | Some mainEncryptedPrivateKey ->
+        | Some encryptedSeedInfo ->
             try
-                let _privKey, secretRecoveryPhrase = SymmetricEncryptionManager.Load mainEncryptedPrivateKey password
+                let _privKey, secretRecoveryPhrase = SymmetricEncryptionManager.Load encryptedSeedInfo password
                 secretRecoveryPhrase
             with
             | :? System.Security.Cryptography.CryptographicException ->

@@ -385,11 +385,11 @@ module Account =
                     raise InvalidPassword
             else
                 failwith "BUG: account file is empty and the main account json doesn't exist"
-        | Some mainEncryptedPrivateKey ->
+        | Some encryptedSeedInfo ->
             try
                 let privKey, _secretRecoveryPhrase =
                     SymmetricEncryptionManager.Load
-                        mainEncryptedPrivateKey
+                        encryptedSeedInfo
                         password
                 new Key (privKey)
             with

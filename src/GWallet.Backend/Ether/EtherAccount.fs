@@ -252,11 +252,11 @@ module internal Account =
                         raise InvalidPassword
                 else
                     failwith "BUG: account content is empty and the main account json doesn't exist"
-            | Some mainEncryptedPrivateKey ->
+            | Some encryptedSeedInfo ->
                 try
                     let privKeyInBytes, _secretRecoveryPhrase =
                         SymmetricEncryptionManager.Load
-                            mainEncryptedPrivateKey
+                            encryptedSeedInfo
                             password
                     privKeyInBytes
                 with

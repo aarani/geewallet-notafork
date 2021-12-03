@@ -6,6 +6,7 @@ open System.Linq
 open System.Reflection
 
 open Xamarin.Essentials
+open Newtonsoft.Json
 
 open GWallet.Backend.FSharpUtil.UwpHacks
 
@@ -185,7 +186,9 @@ module Config =
         let fileExists = File.Exists filePath.FullName
 
         if fileExists then
-            File.ReadAllText filePath.FullName
+            let encryptedInfo = File.ReadAllText filePath.FullName
+
+            JsonConvert.DeserializeObject<SymmetricEncryptionManager.EncryptedSeedInfo> encryptedInfo
             |> Some
         else
             None
