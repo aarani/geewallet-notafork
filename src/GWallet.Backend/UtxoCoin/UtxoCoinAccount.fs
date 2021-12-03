@@ -373,28 +373,28 @@ module Account =
         finalTransaction
 
     let internal GetPrivateKey (account: NormalAccount) password =
-        let encryptedPrivateKey = account.GetEncryptedPrivateKey()
-        if encryptedPrivateKey <> String.Empty then
-            let encryptedSecret = BitcoinEncryptedSecretNoEC(encryptedPrivateKey, GetNetwork (account:>IAccount).Currency)
-            try
-                encryptedSecret.GetKey(password)
-            with
-            | :? SecurityException ->
-                raise InvalidPassword
-        else
-            match Config.GetEncryptedPrivateSecrets () with
-            | Some mainEncryptedPrivateKey ->
+        match Config.GetEncryptedPrivateSecrets () with
+        | None ->
+            let encryptedPrivateKey = account.GetEncryptedPrivateKey()
+            if not (String.IsNullOrWhiteSpace encryptedPrivateKey) then
+                let encryptedSecret = BitcoinEncryptedSecretNoEC(encryptedPrivateKey, GetNetwork (account:>IAccount).Currency)
                 try
-                    let privKey, _secretRecoveryPhrase = 
-                        SymmetricEncryptionManager.Load 
-                            mainEncryptedPrivateKey 
-                            password
-                    new Key (privKey)
+                    encryptedSecret.GetKey(password)
                 with
-                | :? System.Security.Cryptography.CryptographicException ->
+                | :? SecurityException ->
                     raise InvalidPassword
-            | None ->
-                failwith "BUG: corrupted account file"
+            else
+                failwith "BUG: account file is empty and the main account json doesn't exist"
+        | Some mainEncryptedPrivateKey ->
+            try
+                let privKey, _secretRecoveryPhrase =
+                    SymmetricEncryptionManager.Load
+                        mainEncryptedPrivateKey
+                        password
+                new Key (privKey)
+            with
+            | :? System.Security.Cryptography.CryptographicException ->
+                raise InvalidPassword
 
     let internal SignTransaction (account: NormalUtxoAccount)
                                  (txMetadata: TransactionMetadata)

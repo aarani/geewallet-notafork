@@ -233,27 +233,27 @@ module internal Account =
 
     let internal GetPrivateKey (account: NormalAccount) password =
         let privKeyInBytes =
-            let encryptedPrivateKey = account.GetEncryptedPrivateKey()
-            if encryptedPrivateKey <> String.Empty then
-                try
-                    KeyStoreService.DecryptKeyStoreFromJson(password, encryptedPrivateKey)
-                with
-                | :? DecryptionException ->
-                    raise InvalidPassword
-            else
-                match Config.GetEncryptedPrivateSecrets () with
-                | Some mainEncryptedPrivateKey ->
+            match Config.GetEncryptedPrivateSecrets () with
+            | None ->
+                let encryptedPrivateKey = account.GetEncryptedPrivateKey()
+                if not (String.IsNullOrWhiteSpace encryptedPrivateKey) then
                     try
-                        let privKeyInBytes, _secretRecoveryPhrase =
-                            SymmetricEncryptionManager.Load
-                                mainEncryptedPrivateKey
-                                password
-                        privKeyInBytes
+                        KeyStoreService.DecryptKeyStoreFromJson(password, encryptedPrivateKey)
                     with
-                    | :? System.Security.Cryptography.CryptographicException ->
+                    | :? DecryptionException ->
                         raise InvalidPassword
-                | None ->
-                    failwith "BUG: corrupted account file"
+                else
+                    failwith "BUG: account content is empty and the main account json doesn't exist"
+            | Some mainEncryptedPrivateKey ->
+                try
+                    let privKeyInBytes, _secretRecoveryPhrase =
+                        SymmetricEncryptionManager.Load
+                            mainEncryptedPrivateKey
+                            password
+                    privKeyInBytes
+                with
+                | :? System.Security.Cryptography.CryptographicException ->
+                    raise InvalidPassword
 
         EthECKey(privKeyInBytes, true)
 
