@@ -287,8 +287,16 @@ module LayerTwo =
 
                     let acceptFeeRate = UserInteraction.AskYesNo "Do you accept?"
                     if acceptFeeRate then
-                        let password = UserInteraction.AskPassword false
-                        let nodeClient = Lightning.Connection.StartClient channelStore password
+                        let rec tryStartClient () =
+                            let password = UserInteraction.AskPassword false
+                            try
+                                Lightning.Connection.StartClient channelStore password, password
+                            with
+                            | :? InvalidPassword ->
+                                Presentation.Error "Invalid password, try again."
+                                tryStartClient ()
+
+                        let nodeClient, password = tryStartClient ()
                         let! pendingChannelRes =
                             Lightning.Network.OpenChannel
                                 nodeClient
@@ -382,8 +390,15 @@ module LayerTwo =
             let account = AskLightningAccount None
             let channelStore = ChannelStore account
             let bindAddress = AskBindAddress()
-            let password = UserInteraction.AskPassword false
-            use nodeServer = Lightning.Connection.StartServer channelStore password bindAddress
+            let rec tryStartServer () =
+                let password = UserInteraction.AskPassword false
+                try
+                    Lightning.Connection.StartServer channelStore password bindAddress
+                with
+                | :? InvalidPassword ->
+                    Presentation.Error "Invalid password, try again."
+                    tryStartServer ()
+            use nodeServer = tryStartServer ()
             let nodeEndPoint = Lightning.Network.EndPoint nodeServer
             Console.WriteLine(sprintf "This node, connect to it: %s" (nodeEndPoint.ToString()))
             let! acceptChannelRes = Lightning.Network.AcceptChannel nodeServer
