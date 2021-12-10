@@ -16,20 +16,26 @@ module SymmetricEncryptionManager =
 
     type EncryptedSeedInfo =
         {
+            Salt: string
             DecryptionIV: string
             CipherText: string
         }
 
+    let ScryptSaltSizeInBytes = 32
     let AesKeySizeInBytes = 32
 
     let private Encrypt (plainText: string) (password: string) =
         let passwordBytes = Encoding.UTF8.GetBytes password
         let plainTextBytes = Encoding.UTF8.GetBytes plainText
+        use secureRandomEngine = new RNGCryptoServiceProvider()
 
-        //FIXME: use PBKDF or SCrypt here
+        let salt = Array.zeroCreate ScryptSaltSizeInBytes
+        secureRandomEngine.GetNonZeroBytes salt
+
+        let keyBytes = NBitcoin.Crypto.SCrypt.BitcoinComputeDerivedKey (passwordBytes, salt, AesKeySizeInBytes)
+
         use aes =
-            Aes.Create(Key = NBitcoin.Crypto.Hashes.SHA256 passwordBytes)
-
+            Aes.Create(Key = keyBytes)
         aes.GenerateIV()
 
         if aes.KeySize <> AesKeySizeInBytes * 8 then
@@ -46,6 +52,7 @@ module SymmetricEncryptionManager =
         let encryptedData = memStream.ToArray()
 
         {
+            Salt = Convert.ToBase64String salt
             DecryptionIV = Convert.ToBase64String aes.IV
             CipherText = Convert.ToBase64String encryptedData
         }
@@ -54,14 +61,18 @@ module SymmetricEncryptionManager =
     let private Decrypt (encryptedInfo: EncryptedSeedInfo) (password: string) =
         let passwordBytes = Encoding.UTF8.GetBytes password
 
-        let encryptedData, decryptionIv = 
+        let encryptedData, decryptionIv, salt =
             encryptedInfo.CipherText
             |> Convert.FromBase64String,
             encryptedInfo.DecryptionIV
+            |> Convert.FromBase64String,
+            encryptedInfo.Salt
             |> Convert.FromBase64String
 
+        let keyBytes = NBitcoin.Crypto.SCrypt.BitcoinComputeDerivedKey (passwordBytes, salt, AesKeySizeInBytes)
+
         use aes =
-            Aes.Create(Key = NBitcoin.Crypto.Hashes.SHA256 passwordBytes, IV = decryptionIv)
+            Aes.Create(Key = keyBytes, IV = decryptionIv)
 
         let decryptor = aes.CreateDecryptor(aes.Key, aes.IV)
         use memStream = new MemoryStream()
