@@ -542,7 +542,7 @@ module Account =
         return allConceptAccounts
     }
 
-    let CreateAllAccounts (privateKeyBytes: array<byte>) (encryptionPassword: string) (passphrase: string): Async<unit> = async {
+    let CreateAllAccounts (privateKeyBytes: array<byte>) (passphrase: string) (encryptionPassword: string): Async<unit> = async {
         SymmetricEncryptionManager.Save privateKeyBytes passphrase encryptionPassword
         |> Config.SetEncryptedPrivateSecrets
 
@@ -582,7 +582,7 @@ module Account =
         async {
             RemoveAllNormalAccounts ()
             let! masterPrivateKey = GenerateMasterPrivateKey passphrase dobPartOfSalt emailPartOfSalt
-            do! CreateAllAccounts masterPrivateKey password passphrase
+            do! CreateAllAccounts masterPrivateKey passphrase password
         }
 
     let RevealRecoveryPhrase (password: string) =

@@ -385,7 +385,7 @@ let rec PerformOperation (numActiveAccounts: uint32) (numHotAccounts: uint32) =
         let password = UserInteraction.AskPassword true
         Async.RunSynchronously <| async {
             let! privateKeyBytes = Async.AwaitTask masterPrivateKeyTask
-            return! Account.CreateAllAccounts privateKeyBytes password passphrase
+            return! Account.CreateAllAccounts privateKeyBytes passphrase password
         }
         Console.WriteLine("Accounts created")
         UserInteraction.PressAnyKeyToContinue()
