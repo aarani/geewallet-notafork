@@ -379,7 +379,7 @@ module Account =
             if not (String.IsNullOrWhiteSpace encryptedPrivateKey) then
                 let encryptedSecret = BitcoinEncryptedSecretNoEC(encryptedPrivateKey, GetNetwork (account:>IAccount).Currency)
                 try
-                    encryptedSecret.GetKey(password)
+                    encryptedSecret.GetKey password
                 with
                 | :? SecurityException ->
                     raise InvalidPassword
