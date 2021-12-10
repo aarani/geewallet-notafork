@@ -20,6 +20,8 @@ module SymmetricEncryptionManager =
             CipherText: string
         }
 
+    let AesKeySizeInBytes = 32
+
     let private Encrypt (plainText: string) (password: string) =
         let passwordBytes = Encoding.UTF8.GetBytes password
         let plainTextBytes = Encoding.UTF8.GetBytes plainText
@@ -29,6 +31,10 @@ module SymmetricEncryptionManager =
             Aes.Create(Key = NBitcoin.Crypto.Hashes.SHA256 passwordBytes)
 
         aes.GenerateIV()
+
+        if aes.KeySize <> AesKeySizeInBytes * 8 then
+            failwith "Invalid key size, aes.KeySize should be == 256"
+
         let encryptor = aes.CreateEncryptor(aes.Key, aes.IV)
         use memStream = new MemoryStream()
 
