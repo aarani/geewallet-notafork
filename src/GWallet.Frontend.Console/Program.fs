@@ -446,12 +446,12 @@ let rec CheckArchivedAccountsAreEmpty(): bool =
 
 let rec ProgramMainLoop() =
     let activeAccounts = Account.GetAllActiveAccounts()
-    let channelStatusJobs: seq<Async<Async<seq<string>>>> = LayerTwo.GetChannelStatuses activeAccounts
+    let channelStatusJobs: seq<Async<seq<string> * Option<unit -> Async<unit>>>> = LayerTwo.GetChannelStatuses activeAccounts
     let revokedTxCheckJobs: seq<Async<Option<string>>> =
         Lightning.ChainWatcher.CheckForChannelFraudsAndSendRevocationTx
         <| activeAccounts.OfType<UtxoCoin.NormalUtxoAccount>()
     let revokedTxCheckJob: Async<array<Option<string>>> = Async.Parallel revokedTxCheckJobs
-    let channelInfoInteractionsJob: Async<array<Async<seq<string>>>> = Async.Parallel channelStatusJobs
+    let channelInfoInteractionsJob: Async<array<seq<string> * Option<unit -> Async<unit>>>> = Async.Parallel channelStatusJobs
     let displayAccountStatusesJob =
         UserInteraction.DisplayAccountStatuses(WhichAccount.All activeAccounts)
     let channelInfoInteractions, accountStatusesLines, _ =
@@ -463,10 +463,11 @@ let rec ProgramMainLoop() =
     Console.WriteLine(String.concat Environment.NewLine accountStatusesLines)
 
     Console.WriteLine String.Empty
-    for channelInfoInteraction in channelInfoInteractions do
-        let channelStatusLines =
-            channelInfoInteraction |> Async.RunSynchronously
+    for channelStatusLines, channelInteractiveProcess in channelInfoInteractions do
         Console.WriteLine(String.concat Environment.NewLine channelStatusLines)
+        if channelInteractiveProcess.IsSome then
+            channelInteractiveProcess.Value ()
+            |> Async.RunSynchronously 
     Console.WriteLine String.Empty
 
     if CheckArchivedAccountsAreEmpty() then
