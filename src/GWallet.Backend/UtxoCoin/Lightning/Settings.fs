@@ -50,7 +50,12 @@ module Settings =
             MaxHTLCValueInFlightMSat = LNMoney 10000L
             ChannelReserveSatoshis = funding * Config.ChannelReservePercentage / 100L
             HTLCMinimumMSat = LNMoney 1000L
-            ToSelfDelay = BlockHeightOffset16 6us
+            ToSelfDelay =
+                match currency with
+                | BTC -> 2016us
+                | LTC -> 8064us
+                | _ -> failwith "Unsupported currency"
+                |> BlockHeightOffset16
             MaxAcceptedHTLCs = uint16 10
             Features = SupportedFeatures funding currency
         }
