@@ -651,12 +651,15 @@ module LayerTwo =
             let tryClaimFunds password =
                 async {
                     let nodeClient = Lightning.Connection.StartClient channelStore password
+                    //FIXME: better message
+                    let doCpfp =
+                        closingTxHeightOpt.IsNone && 
+                        UserInteraction.AskYesNo "The force-close transaction is not confirmed yet, Do you want to use CPFP?"
                     let! recoveryTxStringResult =
                         (Node.Client nodeClient).CreateRecoveryTxForRemoteForceClose
                             channelInfo.ChannelId
                             closingTx
-                            // only use CPFP if closing transaction has not been confirmed yet
-                            closingTxHeightOpt.IsNone
+                            doCpfp
                     match recoveryTxStringResult with
                     | Ok recoveryTxString ->
                         let! txIdString =
