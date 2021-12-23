@@ -136,7 +136,7 @@ module LayerTwo =
                 None
             else
                 match Int32.TryParse indexText with
-                | true, index when index < channelIds.Count() ->
+                | true, index when index > 0 && index <= channelIds.Count() ->
                     Some (channelIds.ElementAt (index - 1))
                 | _ ->
                     Console.WriteLine "Invalid option"
