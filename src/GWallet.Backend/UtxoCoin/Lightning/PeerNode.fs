@@ -68,6 +68,7 @@ and internal PeerNode =
                 return! PeerNode.AcceptFromTransportListener transportListener peerNodeId
     }
 
+    [<Obsolete("Use AcceptFromTransportListener or Connect instead.")>]
     static member internal ConnectAcceptFromTransportListener (transportListener: TransportListener)
                                                               (peerNodeId: NodeId)
                                                               (peerId: PeerId)
