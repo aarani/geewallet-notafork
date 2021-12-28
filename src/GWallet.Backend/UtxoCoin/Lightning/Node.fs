@@ -674,7 +674,7 @@ type Node =
     member self.CreateRecoveryTxForLocalForceClose
         (channelId: ChannelIdentifier)
         (commitmentTxString: string)
-        : Async<Result<string, ClosingBalanceBelowDustLimitError>> =
+        : Async<Result<string * TransactionMetadata, ClosingBalanceBelowDustLimitError>> =
             async {
                 let nodeMasterPrivKey =
                     match self with
@@ -712,7 +712,12 @@ type Node =
                         let fee = transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
                         transactionBuilder.SendFees fee |> ignore
                         let recoveryTransaction = transactionBuilder.BuildTransaction true
-                        return Ok <| recoveryTransaction.ToHex()
+                        let transactionMetadata =
+                            {
+                                Fee = MinerFee (fee.Satoshi, DateTime.UtcNow, currency)
+                                Inputs = List.empty
+                            }
+                        return Ok <| (recoveryTransaction.ToHex (), transactionMetadata)
                 }
                 return recoveryTransactionString
             }
@@ -727,12 +732,12 @@ type Node =
             // This should still be done once here to make sure local output isn't dust
             // and also we use InitialRecoveryTransactionOpt property as an indication
             // that we initiated a force-close.
-            let! recoveryTxStringResult = self.CreateRecoveryTxForLocalForceClose channelId commitmentTxString
-            match recoveryTxStringResult with
+            let! recoveryTxResult = self.CreateRecoveryTxForLocalForceClose channelId commitmentTxString
+            match recoveryTxResult with
             | Error err ->
                 self.ChannelStore.DeleteChannel channelId
                 return Error err
-            | Ok recoveryTxString ->
+            | Ok (recoveryTxString, _metadata) ->
                 let newSerializedChannel = {
                     serializedChannel with
                         InitialRecoveryTransactionOpt = Some recoveryTxString
@@ -745,7 +750,7 @@ type Node =
         (channelId: ChannelIdentifier)
         (closingTx: ForceCloseTx)
         (requiresCpfp: bool)
-        : Async<Result<string, ClosingBalanceBelowDustLimitError>> =
+        : Async<Result<string * TransactionMetadata, ClosingBalanceBelowDustLimitError>> =
         async {
             let nodeMasterPrivKey =
                 match self with
@@ -790,7 +795,12 @@ type Node =
                         transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
                 transactionBuilder.SendFees fee |> ignore
                 let recoveryTransaction = transactionBuilder.BuildTransaction true
-                return Ok <| recoveryTransaction.ToHex ()
+                let transactionMetadata =
+                    {
+                        Fee = MinerFee (fee.Satoshi, DateTime.UtcNow, currency)
+                        Inputs = List.empty
+                    }
+                return Ok <| (recoveryTransaction.ToHex (), transactionMetadata)
         }
 
     member self.UpdateFee (channelId: ChannelIdentifier)
