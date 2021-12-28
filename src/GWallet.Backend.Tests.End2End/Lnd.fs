@@ -74,6 +74,7 @@ type Lnd = {
             )
 
         let! _ = Async.AwaitTask <| lndClient.SwaggerClient.InitWalletAsync initWalletReq
+        bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
         processWrapper.WaitForMessage (fun msg -> msg.EndsWith "Server listening on 127.0.0.2:9735")
         return {
             LndDir = lndDir
