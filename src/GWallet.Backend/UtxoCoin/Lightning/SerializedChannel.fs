@@ -67,6 +67,7 @@ type SerializedChannel =
         CounterpartyIP: IPEndPoint
         InitialRecoveryTransactionOpt: Option<string>
         LocalChannelPubKeys: ChannelPubKeys
+        NodeClientType: NodeClientType
     }
     static member LightningSerializerSettings currency: JsonSerializerSettings =
         let settings = JsonMarshalling.SerializerSettings

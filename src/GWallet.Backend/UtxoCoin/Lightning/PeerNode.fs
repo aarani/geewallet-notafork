@@ -32,6 +32,7 @@ and internal PeerNode =
     {
         InitMsg: InitMsg
         MsgStream: MsgStream
+        NodeClientType: NodeClientType
     }
     interface IDisposable with
         member self.Dispose() =
@@ -40,16 +41,19 @@ and internal PeerNode =
     static member internal Connect (nodeMasterPrivKey: NodeMasterPrivKey)
                                    (peerNodeId: NodeId)
                                    (peerId: PeerId)
+                                   (nodeIndentifier: NodeIdentifier)
                                        : Async<Result<PeerNode, ConnectError>> = async {
-        let! connectRes = MsgStream.Connect nodeMasterPrivKey peerNodeId peerId
+        let! connectRes = MsgStream.Connect nodeMasterPrivKey peerNodeId peerId nodeIndentifier
         match connectRes with
         | Error connectError -> return Error connectError
         | Ok (initMsg, msgStream) ->
             return Ok {
                 InitMsg = initMsg
                 MsgStream = msgStream
+                NodeClientType = NodeClientType.TcpClient
             }
     }
+
 
     static member internal AcceptFromTransportListener (transportListener: TransportListener)
                                                        (peerNodeId: NodeId)
@@ -62,6 +66,7 @@ and internal PeerNode =
                 return Ok {
                     InitMsg = initMsg
                     MsgStream = msgStream
+                    NodeClientType = transportListener.NodeClientType
                 }
             else
                 (msgStream :> IDisposable).Dispose()
@@ -77,6 +82,7 @@ and internal PeerNode =
             return Ok {
                 InitMsg = initMsg
                 MsgStream = msgStream
+                NodeClientType = transportListener.NodeClientType
             }
     }
 
@@ -86,10 +92,10 @@ and internal PeerNode =
     member internal self.PeerId: PeerId =
         self.MsgStream.PeerId
 
-    member internal self.RemoteEndPoint: IPEndPoint =
+    member internal self.RemoteEndPoint: Option<IPEndPoint> =
         self.MsgStream.RemoteEndPoint
 
-    member internal self.NodeEndPoint: NodeEndPoint =
+    member internal self.NodeEndPoint: Option<NodeEndPoint> =
         self.MsgStream.NodeEndPoint
 
     member internal self.NodeMasterPrivKey(): NodeMasterPrivKey =

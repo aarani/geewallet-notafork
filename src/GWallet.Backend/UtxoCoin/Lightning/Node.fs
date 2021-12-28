@@ -12,6 +12,8 @@ open DotNetLightning.Crypto
 open DotNetLightning.Utils
 open DotNetLightning.Serialization.Msgs
 open ResultUtils.Portability
+open NOnion.Directory
+open NOnion.Network
 
 open GWallet.Backend
 open GWallet.Backend.UtxoCoin
@@ -230,20 +232,26 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
     static member internal AccountPrivateKeyToNodeSecret (accountKey: Key) =
         NBitcoin.ExtKey (accountKey.ToBytes ())
 
-    member internal self.OpenChannel (nodeEndPoint: NodeEndPoint)
+    member internal self.OpenChannel (nodeIdentifier: NodeIdentifier)
                                      (channelCapacity: TransferAmount)
                                          : Async<Result<PendingChannel, IErrorMsg>> = async {
-        let peerId = PeerId (nodeEndPoint.IPEndPoint :> EndPoint)
-        let nodeId = nodeEndPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId
+        let ipEndPoint, nodeId =
+            match nodeIdentifier with
+            | NodeIdentifier.EndPoint nodeEndPoint ->
+                nodeEndPoint.IPEndPoint, (nodeEndPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
+            | NodeIdentifier.NOnionIntroductionPoint nonionIntroductionPoint ->
+                FallbackDirectorySelector.GetRandomFallbackDirectory(), (nonionIntroductionPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
+
+        let peerId = PeerId (ipEndPoint :> EndPoint)
         let! connectRes =
-            PeerNode.Connect nodeMasterPrivKey nodeId peerId
+            PeerNode.Connect nodeMasterPrivKey nodeId peerId nodeIdentifier
         match connectRes with
         | Error connectError ->
             if connectError.PossibleBug then
                 let msg =
                     SPrintF3
                         "error connecting to peer %s to open channel of capacity %M: %s"
-                        (nodeEndPoint.ToString())
+                        (ipEndPoint.ToString())
                         channelCapacity.ValueToSend
                         (connectError :> IErrorMsg).Message
                 Infrastructure.ReportWarningMessage msg
@@ -261,7 +269,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     let msg =
                         SPrintF3
                             "error opening channel with peer %s of capacity %M: %s"
-                            (nodeEndPoint.ToString())
+                            (ipEndPoint.ToString())
                             channelCapacity.ValueToSend
                             (openChannelError :> IErrorMsg).Message
                     Infrastructure.ReportWarningMessage msg
@@ -393,6 +401,7 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
     member val internal NodeMasterPrivKey = transportListener.NodeMasterPrivKey
     member val internal NodeId = transportListener.NodeId
     member val EndPoint = transportListener.EndPoint
+    member val TorEndPoint = transportListener.TorEndPoint
     member val Account = channelStore.Account
 
     interface IDisposable with
@@ -843,12 +852,14 @@ module public Connection =
 
     let public StartServer (channelStore: ChannelStore)
                            (password: string)
-                           (bindAddress: IPEndPoint)
-                               : NodeServer =
+                           (maybeBindAddress: Option<IPEndPoint>)
+                           (nodeClientType: NodeClientType)
+                               : Async<NodeServer> = async {
         let privateKey = Account.GetPrivateKey channelStore.Account password
         let nodeMasterPrivKey: NodeMasterPrivKey =
             NodeClient.AccountPrivateKeyToNodeSecret privateKey
             |> NodeMasterPrivKey
-        let transportListener = TransportListener.Bind nodeMasterPrivKey bindAddress
-        new NodeServer (channelStore, transportListener)
+        let! transportListener = TransportListener.Bind nodeMasterPrivKey maybeBindAddress nodeClientType
+        return new NodeServer (channelStore, transportListener)
+        }
 

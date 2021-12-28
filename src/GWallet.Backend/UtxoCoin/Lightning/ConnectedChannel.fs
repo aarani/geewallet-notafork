@@ -156,7 +156,8 @@ type internal ConnectedChannel =
         let! connectRes =
             let nodeId = channel.RemoteNodeId
             let peerId = PeerId (serializedChannel.CounterpartyIP :> EndPoint)
-            PeerNode.Connect nodeMasterPrivKey nodeId peerId
+            // TODO: pass appropriate NodeIdentifier
+            PeerNode.Connect nodeMasterPrivKey nodeId peerId (NodeIdentifier.EndPoint {NodeEndPoint.NodeId = PublicKey(nodeId.Value); IPEndPoint = serializedChannel.CounterpartyIP } )
         match connectRes with
         | Error connectError -> return Error <| Connect connectError
         | Ok peerNode ->
@@ -220,6 +221,7 @@ type internal ConnectedChannel =
             CounterpartyIP = self.PeerNode.PeerId.Value :?> IPEndPoint
             InitialRecoveryTransactionOpt = None
             LocalChannelPubKeys = self.Channel.ChannelPrivKeys.ToChannelPubKeys()
+            NodeClientType = self.PeerNode.NodeClientType
         }
         channelStore.SaveChannel serializedChannel
 

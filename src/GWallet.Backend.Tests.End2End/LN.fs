@@ -1009,7 +1009,7 @@ type LN() =
         let! pendingChannelRes =
             Lightning.Network.OpenChannel
                 walletInstance.NodeClient
-                Config.FundeeNodeEndpoint
+                (NodeIdentifier.EndPoint Config.FundeeNodeEndpoint)
                 transferAmount
         let pendingChannel = UnwrapResult pendingChannelRes "OpenChannel failed"
         let minimumDepth = (pendingChannel :> IChannelToBeOpened).ConfirmationsRequired
