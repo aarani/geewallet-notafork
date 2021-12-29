@@ -470,14 +470,23 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can open channel with LND and send htlcs``() = Async.RunSynchronously <| async {
+    member __.``can open channel with LND and send htlcs and close``() = Async.RunSynchronously <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
+
+        let! balancePrePayments =
+            lnd.OnChainBalance()
 
         do! SendHtlcPaymentsToLnd clientWallet lnd channelId fundingAmount
 
+        do! ClientCloseChannel clientWallet bitcoind channelId
+
+        let! balancePostPayments =
+            lnd.OnChainBalance()
+
+        assert (balancePostPayments = balancePrePayments + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount)
+
         TearDown clientWallet bitcoind electrumServer lnd
     }
-
 
     [<Test>]
     member __.``can close channel with LND``() = Async.RunSynchronously <| async {
