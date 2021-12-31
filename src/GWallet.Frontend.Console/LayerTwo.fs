@@ -604,6 +604,8 @@ module LayerTwo =
         async {
             let! remainingConfirmations = locallyForceClosedData.GetRemainingConfirmations()
             if remainingConfirmations = 0us then
+                Console.WriteLine(sprintf "Channel %s force-closure performed by your account finished successfully (necessary confirmations and timelock have been reached)" (ChannelId.ToString channelInfo.ChannelId))
+                Console.WriteLine "Account must be unlocked to recover funds."
                 let trySendRecoveryTx (password: string) =
                     async {
                         let nodeClient = Lightning.Connection.StartClient channelStore password
