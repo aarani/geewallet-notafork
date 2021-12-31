@@ -136,6 +136,10 @@ type ChannelStore(account: NormalUtxoAccount) =
         Path.Combine (self.AccountDir.FullName, Settings.ConfigDirName)
         |> DirectoryInfo
 
+    member self.DeletedChannelDir: DirectoryInfo =
+        Path.Combine (self.ChannelDir.FullName, "Closed")
+        |> DirectoryInfo
+
     member self.ListChannelIds(): seq<ChannelIdentifier> =
         let extractChannelId path: Option<ChannelIdentifier> =
             let fileName = Path.GetFileName path
@@ -154,9 +158,15 @@ type ChannelStore(account: NormalUtxoAccount) =
         else
             Seq.empty
 
-    member self.ChannelFileName (channelId: ChannelIdentifier): string =
+    member self.ChannelFileName (channelId: ChannelIdentifier) (isDeleted: bool): string =
+        let directory =
+            if isDeleted then
+                self.DeletedChannelDir.FullName
+            else
+                self.ChannelDir.FullName
+
         Path.Combine(
-            self.ChannelDir.FullName,
+            directory,
             SPrintF3
                 "%s%s%s"
                 ChannelStore.ChannelFilePrefix
@@ -165,7 +175,7 @@ type ChannelStore(account: NormalUtxoAccount) =
         )
 
     member internal self.LoadChannel (channelId: ChannelIdentifier): SerializedChannel =
-        let fileName = self.ChannelFileName channelId
+        let fileName = self.ChannelFileName channelId false
         let json = File.ReadAllText fileName
         Marshalling.DeserializeCustom<SerializedChannel> (
             json,
@@ -173,7 +183,7 @@ type ChannelStore(account: NormalUtxoAccount) =
         )
 
     member internal self.SaveChannel (serializedChannel: SerializedChannel) =
-        let fileName = self.ChannelFileName (serializedChannel.ChannelId())
+        let fileName = self.ChannelFileName (serializedChannel.ChannelId()) false
         let json =
             Marshalling.SerializeCustom (
                 serializedChannel,
@@ -196,8 +206,11 @@ type ChannelStore(account: NormalUtxoAccount) =
     }
 
     member self.DeleteChannel (channelId: ChannelIdentifier): unit =
-        let fileName = self.ChannelFileName channelId
-        File.Delete fileName
+        let srcFileName = self.ChannelFileName channelId false
+        let destFileName = self.ChannelFileName channelId true
+        if not self.DeletedChannelDir.Exists then
+            self.DeletedChannelDir.Create()
+        File.Move (srcFileName, destFileName)
 
     member self.GetCommitmentTx (channelId: ChannelIdentifier): string =
         let serializedChannel = self.LoadChannel channelId
