@@ -66,7 +66,7 @@ module Settings =
             DustLimitSatoshis =
                 match currency with
                 | BTC -> 354UL
-                | LTC -> 54600UL
+                | LTC -> 546UL
                 | _ -> failwith "Unsupported currency"
                 |> Money
             MaxHTLCValueInFlightMSat = LNMoney 10000L
