@@ -20,6 +20,8 @@ type internal ReestablishError =
     | PeerErrorResponse of PeerNode * PeerErrorMessage
     | ExpectedReestablishMsg of ILightningMsg
     | ExpectedReestablishOrFundingLockedMsg of ILightningMsg
+    | PeersOutOfSync
+    | InvalidChannelId
     interface IErrorMsg with
         member self.Message =
             match self with
@@ -31,6 +33,10 @@ type internal ReestablishError =
                 SPrintF1 "Expected channel_reestablish, got %A" (msg.GetType())
             | ExpectedReestablishOrFundingLockedMsg msg ->
                 SPrintF1 "Expected channel_reestablish or funding_locked, got %A" (msg.GetType())
+            | PeersOutOfSync ->
+                "Peers are out of sync"
+            | InvalidChannelId ->
+                "Peer was tried to reestablish the wrong channel"
         member self.ChannelBreakdown: bool =
             match self with
             | RecvReestablish recvMsgError ->
@@ -38,6 +44,8 @@ type internal ReestablishError =
             | PeerErrorResponse _ -> true
             | ExpectedReestablishMsg _ -> false
             | ExpectedReestablishOrFundingLockedMsg _ -> false
+            | PeersOutOfSync -> true
+            | InvalidChannelId -> false
 
     member internal self.PossibleBug =
         match self with
@@ -45,6 +53,8 @@ type internal ReestablishError =
         | PeerErrorResponse _
         | ExpectedReestablishMsg _
         | ExpectedReestablishOrFundingLockedMsg _ -> false
+        | PeersOutOfSync -> false
+        | InvalidChannelId -> false
 
 type internal ReconnectError =
     | Connect of ConnectError
@@ -134,17 +144,16 @@ type internal ConnectedChannel =
         }
         match reestablishRes with
         | Error err -> return Error err
-        | Ok (peerNodeAfterReestablishReceived, _theirReestablishMsg) ->
-            // TODO: check their reestablish msg
-            //
-            // A channel_reestablish message contains the channel ID as well as
-            // information specifying what state the remote node thinks the channel
-            // is in. So we need to check that the channel IDs match, validate that
-            // the information they've sent us makes sense, and possibly re-send
-            // commitments. Aside from checking the channel ID this is the sort of
-            // thing that should be handled by DNL, except DNL doesn't have an
-            // ApplyChannelReestablish command.
-            return Ok (peerNodeAfterReestablishReceived, channel)
+        | Ok (peerNodeAfterReestablishReceived, theirReestablishMsg) ->
+            if theirReestablishMsg.ChannelId = channelId.DnlChannelId then
+                let result = ChannelSyncing.checkSync channel.ChannelPrivKeys channel.Channel.SavedChannelState channel.Channel.RemoteNextCommitInfo theirReestablishMsg
+                match result with
+                | ChannelSyncing.SyncResult.Success retransmitList when List.isEmpty retransmitList ->
+                    return Ok (peerNodeAfterReestablishReceived, channel)
+                | _ ->
+                    return Error <| ReestablishError.PeersOutOfSync
+            else
+                return Error <| ReestablishError.InvalidChannelId
     }
 
     static member internal ConnectFromWallet (channelStore: ChannelStore)

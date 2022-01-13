@@ -36,6 +36,7 @@ type private CommitmentsJsonConverter() =
     inherit JsonConverter<Commitments>()
 
     override __.ReadJson(reader: JsonReader, _: Type, _: Commitments, _: bool, serializer: JsonSerializer) =
+        serializer.TypeNameHandling <- TypeNameHandling.Auto
         let serializedCommitments = serializer.Deserialize<SerializedCommitments> reader
         let commitments: Commitments = {
             ProposedLocalChanges = serializedCommitments.ProposedLocalChanges
@@ -47,6 +48,7 @@ type private CommitmentsJsonConverter() =
         commitments
 
     override __.WriteJson(writer: JsonWriter, state: Commitments, serializer: JsonSerializer) =
+        serializer.TypeNameHandling <- TypeNameHandling.Auto
         serializer.Serialize(writer, {
             ProposedLocalChanges = state.ProposedLocalChanges
             ProposedRemoteChanges = state.ProposedRemoteChanges
@@ -77,6 +79,8 @@ type SerializedChannel =
 
         let psbtConverter = NBitcoin.JsonConverters.PSBTJsonConverter (Account.GetNetwork currency)
         settings.Converters.Add psbtConverter
+
+        settings.TypeNameHandling <- TypeNameHandling.Auto
 
         settings
 
