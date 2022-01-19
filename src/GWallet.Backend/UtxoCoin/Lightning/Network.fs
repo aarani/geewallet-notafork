@@ -259,7 +259,7 @@ type internal TransportStream =
                         match task with
                         | Some bytes ->
                             let bytesLength = min (numberBytesToRead - totalBytesRead) bytes.Length
-                            Array.blit bytes 0 buf (totalBytesRead - 1) bytesLength
+                            Array.blit bytes 0 buf totalBytesRead bytesLength
                             return bytesLength
                         | None ->
                             return 0
@@ -323,12 +323,32 @@ type internal TransportStream =
                 let socketExceptions = FindSingleException<SocketException> ex
                 return Error socketExceptions
         | NodeIdentifier.NOnionIntroductionPoint nonionIntroductionPoint ->
-            let directoryIpEndpoint = FallbackDirectorySelector.GetRandomFallbackDirectory() //((IPAddress.Parse nonionIntroductionPoint.IntroductionPointPublicInfo.Address, nonionIntroductionPoint.IntroductionPointPublicInfo.Port) |> IPEndPoint)
-            //let directoryIpEndpoint = ((IPAddress.Parse nonionIntroductionPoint.IntroductionPointPublicInfo.Address, nonionIntroductionPoint.IntroductionPointPublicInfo.Port) |> IPEndPoint)
-            let! directory = TorDirectory.Bootstrap directoryIpEndpoint
-            Infrastructure.LogDebug <| SPrintF1 "Connecting over TOR to %A..." directoryIpEndpoint
+            let retryCount = 10
+            let rec tryGetDirectory retryCount =
+                async {
+                    try
+                        return! TorDirectory.Bootstrap (FallbackDirectorySelector.GetRandomFallbackDirectory())
+                    with
+                    | :? NOnion.NOnionException as ex ->
+                        if retryCount = 0 then
+                            return raise <| FSharpUtil.ReRaise ex
+                        return! tryGetDirectory (retryCount-1)
+                }
+            let! directory = tryGetDirectory retryCount
+
+            let rec tryConnect retryCount =
+                async {
+                    try
+                        return! TorServiceClient.Connect directory nonionIntroductionPoint.IntroductionPointPublicInfo
+                    with
+                    | :? NOnion.NOnionException as ex ->
+                        if retryCount = 0 then
+                            return raise <| FSharpUtil.ReRaise ex
+                        return! tryConnect (retryCount-1)
+                }
+
             try
-                let! torClient = TorServiceClient.Connect directory nonionIntroductionPoint.IntroductionPointPublicInfo
+                let! torClient = tryConnect retryCount
                 Infrastructure.LogDebug <| SPrintF1 "Connected %s" nonionIntroductionPoint.IntroductionPointPublicInfo.Address
                 return Ok (TransportStreamClientType.TorClient (torClient.GetStream()))
             with
