@@ -143,9 +143,31 @@ type internal TransportListener =
             | None -> return failwith "tcp endpoint cannot be null"
         | NodeClientType.TorClient ->
             let retryCount = 10
-            let! directory = TorDirectory.Bootstrap (FallbackDirectorySelector.GetRandomFallbackDirectory())
-            let host = TorServiceHost(directory, retryCount)
-            do! host.Start()
+            let rec tryGetDirectory retryCount =
+                async {
+                    try
+                        return! TorDirectory.Bootstrap (FallbackDirectorySelector.GetRandomFallbackDirectory())
+                    with
+                    | :? NOnion.NOnionException as ex ->
+                        if retryCount = 0 then
+                            return raise <| FSharpUtil.ReRaise ex
+                        return! tryGetDirectory (retryCount-1)
+                }
+            let! directory = tryGetDirectory retryCount
+            let rec tryStart retryCount =
+                async {
+                    try
+                        let host = TorServiceHost(directory, retryCount)
+                        do! host.Start()
+                        return host
+                    with
+                    | :? NOnion.NOnionException as ex ->
+                        if retryCount = 0 then
+                            return raise <| FSharpUtil.ReRaise ex
+                        return! tryStart (retryCount-1)
+                }
+            let! host = tryStart retryCount
+            
             let export = host.Export()
             
             return {
@@ -154,7 +176,7 @@ type internal TransportListener =
                 NodeClientType = nodeClientType
                 ConnectionDetail = Some export
             }
-            }
+        }
 
     member internal self.LocalIPEndPoint: Option<IPEndPoint> =
         match self.Listener with
@@ -259,7 +281,7 @@ type internal TransportStream =
                         match task with
                         | Some bytes ->
                             let bytesLength = min (numberBytesToRead - totalBytesRead) bytes.Length
-                            Array.blit bytes 0 buf (totalBytesRead - 1) bytesLength
+                            Array.blit bytes 0 buf totalBytesRead bytesLength
                             return bytesLength
                         | None ->
                             return 0

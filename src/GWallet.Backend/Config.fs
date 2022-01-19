@@ -106,7 +106,7 @@ module Config =
             match runMode with
             | RunMode.Normal ->
                 let configPath = Environment.GetFolderPath Environment.SpecialFolder.ApplicationData
-                Path.Combine(configPath, "gwallet") |> DirectoryInfo
+                Path.Combine(configPath, "gwallet2") |> DirectoryInfo
             | RunMode.Testing configDir -> configDir
         if not configDir.Exists then
             configDir.Create()
