@@ -20,7 +20,8 @@ type internal ReestablishError =
     | PeerErrorResponse of PeerNode * PeerErrorMessage
     | ExpectedReestablishMsg of ILightningMsg
     | ExpectedReestablishOrFundingLockedMsg of ILightningMsg
-    | PeersOutOfSync
+    | LocalOutOfSync
+    | RemoteOutOfSync
     | InvalidChannelId
     interface IErrorMsg with
         member self.Message =
@@ -33,8 +34,10 @@ type internal ReestablishError =
                 SPrintF1 "Expected channel_reestablish, got %A" (msg.GetType())
             | ExpectedReestablishOrFundingLockedMsg msg ->
                 SPrintF1 "Expected channel_reestablish or funding_locked, got %A" (msg.GetType())
-            | PeersOutOfSync ->
-                "Peers are out of sync"
+            | LocalOutOfSync ->
+                "We are out of sync"
+            | RemoteOutOfSync ->
+                "Remote party is out of sync"
             | InvalidChannelId ->
                 "Peer was tried to reestablish the wrong channel"
         member self.ChannelBreakdown: bool =
@@ -44,7 +47,10 @@ type internal ReestablishError =
             | PeerErrorResponse _ -> true
             | ExpectedReestablishMsg _ -> false
             | ExpectedReestablishOrFundingLockedMsg _ -> false
-            | PeersOutOfSync -> true
+            // If local is out of sync we can't force close or we might lose money
+            | LocalOutOfSync -> false
+            // If remote is out of sync we should help them with force closing the channel
+            | RemoteOutOfSync -> true
             | InvalidChannelId -> false
 
     member internal self.PossibleBug =
@@ -53,7 +59,8 @@ type internal ReestablishError =
         | PeerErrorResponse _
         | ExpectedReestablishMsg _
         | ExpectedReestablishOrFundingLockedMsg _ -> false
-        | PeersOutOfSync -> false
+        | LocalOutOfSync -> false
+        | RemoteOutOfSync -> false
         | InvalidChannelId -> false
 
 type internal ReconnectError =
@@ -147,11 +154,70 @@ type internal ConnectedChannel =
         | Ok (peerNodeAfterReestablishReceived, theirReestablishMsg) ->
             if theirReestablishMsg.ChannelId = channelId.DnlChannelId then
                 let result = ChannelSyncing.checkSync channel.ChannelPrivKeys channel.Channel.SavedChannelState channel.Channel.RemoteNextCommitInfo theirReestablishMsg
+                Console.WriteLine(sprintf "Sync result: %A" result)
                 match result with
-                | ChannelSyncing.SyncResult.Success retransmitList when List.isEmpty retransmitList ->
-                    return Ok (peerNodeAfterReestablishReceived, channel)
+                | ChannelSyncing.SyncResult.Success retransmitList ->
+                    let rec retransmit (retransmitList: list<ILightningMsg>) (peerNode: PeerNode) =
+                        async {
+                            match List.tryHead retransmitList with
+                            | Some msg ->
+                                let! newPeerNode = peerNode.SendMsg msg
+                                Console.WriteLine(sprintf "retransmited msg %A" msg)
+                                return! retransmit (retransmitList.Tail) newPeerNode
+                            | None ->
+                                return peerNode
+                        }
+
+                    let! peerNodeAfterRetransmit =  retransmit retransmitList peerNodeAfterReestablishReceived
+                    //FIXME: fix localNextHtlcId and remoteNextHtlcId
+                    //remove unsigned changes
+                    let newChannel =
+                        {
+                             channel.Channel with
+                                Commitments = 
+                                {
+                                    channel.Channel.Commitments with
+                                        ProposedLocalChanges = List.empty
+                                        ProposedRemoteChanges = List.empty
+                                }
+                        }
+                    let! newNewChannel, peerNodeAfterIfRevokeReceived =
+                        async {
+                            match channel.Channel.RemoteNextCommitInfo with
+                            | Some (Waiting _) ->
+                                let! recvMsgRes = peerNodeAfterRetransmit.RecvChannelMsg()
+                                match recvMsgRes with
+                                | Error (RecvMsg e) -> return failwith (sprintf "%A" e)
+                                | Error (ReceivedPeerErrorMessage (_, e)) ->
+                                    return failwith (sprintf "%A" e)
+                                | Ok (peerNodeAfterRevokeReceived, channelMsg) ->
+                                    match channelMsg with
+                                    | :? RevokeAndACKMsg as theirRevokeAndAckMsg ->
+                                        let channelAferRevokeAndAckRes =
+                                            newChannel.ApplyRevokeAndACK theirRevokeAndAckMsg
+                                        match channelAferRevokeAndAckRes with
+                                        | Ok channelAfterRevokeAndAck ->
+                                            Console.WriteLine("Received revoke msg")
+                                            return (channelAfterRevokeAndAck, peerNodeAfterRevokeReceived)
+                                        | e -> return failwith (sprintf "%A" e)
+                                    | _ -> return failwith ""
+                            | _ ->
+                                Console.WriteLine("Didn't need revoke msg")
+                                return (newChannel, peerNodeAfterRetransmit)
+                        }
+
+                    // return LocalOutOfSync just so we don't breakdown anything
+                    let newMonoHopChannel =
+                        {
+                            channel with
+                                Channel = newNewChannel
+                        }
+
+                    return Ok (peerNodeAfterIfRevokeReceived, newMonoHopChannel)
+                | ChannelSyncing.SyncResult.RemoteLate ->
+                    return Error <| ReestablishError.RemoteOutOfSync
                 | _ ->
-                    return Error <| ReestablishError.PeersOutOfSync
+                    return Error <| ReestablishError.LocalOutOfSync
             else
                 return Error <| ReestablishError.InvalidChannelId
     }
