@@ -499,6 +499,11 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             |> ignore
         this.BalanceRefreshCancelSources <- Seq.empty
 
+    override this.OnAppearing() =
+        normalChartView.Draw()
+        readonlyChartView.Draw()
+        base.OnAppearing()
+
     member private this.Init () =
         normalChartView.DefaultImageSource <- FrontendHelpers.GetSizedImageSource "logo" 512
         readonlyChartView.DefaultImageSource <- FrontendHelpers.GetSizedImageSource "logo" 512
