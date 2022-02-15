@@ -150,13 +150,24 @@ type internal ConnectedChannel =
     static member internal ConnectFromWallet (channelStore: ChannelStore)
                                              (nodeMasterPrivKey: NodeMasterPrivKey)
                                              (channelId: ChannelIdentifier)
+                                             (nOnionEndpoint: Option<NOnionEndpoint>)
                                                  : Async<Result<ConnectedChannel, ReconnectError>> = async {
         let! serializedChannel, channel =
             ConnectedChannel.LoadChannel channelStore nodeMasterPrivKey channelId
         let! connectRes =
             let nodeId = channel.RemoteNodeId
-            let peerId = PeerId (serializedChannel.CounterpartyIP :> EndPoint)
-            PeerNode.Connect nodeMasterPrivKey nodeId peerId
+            let nodeIdentifier =
+                match nOnionEndpoint with
+                | Some introPoint ->
+                    NodeIdentifier.TorEndPoint introPoint
+                | _ ->
+                    match serializedChannel.CounterpartyIP with
+                    | Some counterPartyIP ->
+                        NodeIdentifier.TcpEndPoint { NodeEndPoint.NodeId = PublicKey nodeId.Value; IPEndPoint = counterPartyIP }
+                    | None ->
+                        // TODO: add better message
+                        failwith "CounterPartyIP must be specified for TCP connections"
+            PeerNode.Connect nodeMasterPrivKey nodeIdentifier
         match connectRes with
         | Error connectError -> return Error <| Connect connectError
         | Ok peerNode ->
@@ -210,6 +221,7 @@ type internal ConnectedChannel =
 
     member self.SaveToWallet() =
         let channelStore = ChannelStore self.Account
+
         let serializedChannel : SerializedChannel = {
             ChannelIndex = self.ChannelIndex
             RemoteNextCommitInfo = self.Channel.Channel.RemoteNextCommitInfo
@@ -218,8 +230,9 @@ type internal ConnectedChannel =
             Commitments = self.Channel.Channel.Commitments
             AccountFileName = self.Account.AccountFile.Name
             CounterpartyIP = self.PeerNode.RemoteEndPoint
-            ForceCloseTxIdOpt = None
+            ForceCloseTxIdOpt = None            
             LocalChannelPubKeys = self.Channel.ChannelPrivKeys.ToChannelPubKeys()
+            NodeServerType = self.PeerNode.NodeServerType
             RecoveryTxIdOpt = None
         }
         channelStore.SaveChannel serializedChannel

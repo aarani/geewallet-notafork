@@ -170,7 +170,7 @@ type ClientWalletInstance private (wallet: WalletInstance, nodeClient: NodeClien
         let! pendingChannelRes =
             Lightning.Network.OpenChannel
                 self.NodeClient
-                nodeEndPoint
+                (NodeIdentifier.TcpEndPoint nodeEndPoint)
                 transferAmount
         let pendingChannel = UnwrapResult pendingChannelRes "OpenChannel failed"
         let minimumDepth = (pendingChannel :> IChannelToBeOpened).ConfirmationsRequired
@@ -179,8 +179,7 @@ type ClientWalletInstance private (wallet: WalletInstance, nodeClient: NodeClien
         bitcoind.GenerateBlocks (BlockHeightOffset32 minimumDepth) self.Address
 
         do! self.WaitForFundingConfirmed channelId
-
-        let! lockFundingRes = Lightning.Network.ConnectLockChannelFunding self.NodeClient channelId
+        let! lockFundingRes = Lightning.Network.ConnectLockChannelFunding self.NodeClient channelId None
         UnwrapResult lockFundingRes "LockChannelFunding failed"
 
         let channelInfo = self.ChannelStore.ChannelInfo channelId
@@ -198,8 +197,8 @@ type ClientWalletInstance private (wallet: WalletInstance, nodeClient: NodeClien
 type ServerWalletInstance private (wallet: WalletInstance, nodeServer: NodeServer) =
     static member New (listenEndpoint: IPEndPoint) (privateKeyOpt: Option<Key>): Async<ServerWalletInstance> = async {
         let! wallet = WalletInstance.New privateKeyOpt
-        let nodeServer =
-            Connection.StartServer wallet.ChannelStore wallet.Password listenEndpoint
+        let! nodeServer =
+            Connection.StartServer wallet.ChannelStore wallet.Password (NodeServerType.Tcp (Some listenEndpoint))
         return new ServerWalletInstance(wallet, nodeServer)
     }
 
@@ -227,6 +226,6 @@ type ServerWalletInstance private (wallet: WalletInstance, nodeServer: NodeServe
         wallet.FundByMining bitcoind lnd
 
     member __.NodeServer: NodeServer = nodeServer
-    member self.NodeEndPoint =
+    member self.EndPointType =
         Lightning.Network.EndPoint self.NodeServer
 
