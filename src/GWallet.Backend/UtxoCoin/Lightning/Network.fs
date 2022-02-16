@@ -326,15 +326,31 @@ type internal TransportStream =
             return Error socketExceptions
         }
 
-    static member private TorConnect (nOnionEndPoint: NOnionEndPoint)
+    static member private AcceptAny (listener: IncomingConnectionMethod)
+        : Async<Result<TransportType, seq<SocketException>>> = async {
+        try
+            match listener with
+            | IncomingConnectionMethod.Tcp tcpListener ->
+                let! client = tcpListener.AcceptTcpClientAsync() |> Async.AwaitTask
+                return Ok (TransportType.Tcp client)
+            | IncomingConnectionMethod.Tor torListener ->
+                let! client = torListener.AcceptClient()
+                return Ok (TransportType.Tor client)
+        with
+        | ex ->
+            let socketExceptions = FindSingleException<SocketException> ex
+            return Error socketExceptions
+    }
+
+    static member private TorConnect (nonionEndPoint: NOnionEndPoint)
                                         : Async<Result<TorServiceClient, seq<SocketException>>> = async {
-        let introductionIpEndPoint = ((IPAddress.Parse nOnionEndPoint.IntroductionPoint.Address, nOnionEndPoint.IntroductionPoint.Port) |> IPEndPoint)
+        let introductionIpEndPoint = ((IPAddress.Parse nonionEndPoint.IntroductionPoint.Address, nonionEndPoint.IntroductionPoint.Port) |> IPEndPoint)
         Infrastructure.LogDebug <| SPrintF1 "Connecting over TOR to %A..." introductionIpEndPoint
 
         let! directory = TorOperations.GetTorDirectory()
         try
-            let! torClient = TorOperations.TorConnect directory nOnionEndPoint.IntroductionPoint
-            Infrastructure.LogDebug <| SPrintF1 "Connected %s" nOnionEndPoint.IntroductionPoint.Address
+            let! torClient = TorOperations.TorConnect directory nonionEndPoint.IntroductionPoint
+            Infrastructure.LogDebug <| SPrintF1 "Connected %s" nonionEndPoint.IntroductionPoint.Address
             return Ok torClient
         with
         | ex ->
@@ -361,22 +377,6 @@ type internal TransportStream =
             | Error error ->
                 return Error error
             }
-
-    static member private TcpOrTorAcceptAny (listener: IncomingConnectionMethod)
-                                               : Async<Result<TransportType, seq<SocketException>>> = async {
-        try
-            match listener with
-            | IncomingConnectionMethod.Tcp tcpListener ->
-                let! client = tcpListener.AcceptTcpClientAsync() |> Async.AwaitTask
-                return Ok (TransportType.Tcp client)
-            | IncomingConnectionMethod.Tor torListener ->
-                let! client = torListener.AcceptClient()
-                return Ok (TransportType.Tor client)
-        with
-        | ex ->
-            let socketExceptions = FindSingleException<SocketException> ex
-            return Error socketExceptions
-    }
 
     static member private ConnectHandshakeTcp
         (client: TcpClient)
@@ -482,8 +482,8 @@ type internal TransportStream =
             match nodeIdentifier with
             | NodeIdentifier.TcpEndPoint nodeEndPoint ->
                 (nodeEndPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
-            | NodeIdentifier.TorEndPoint nOnionEndPoint ->
-                (nOnionEndPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
+            | NodeIdentifier.TorEndPoint nonionEndPoint ->
+                (nonionEndPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
 
         let! connectRes = TransportStream.TransportConnect None nodeIdentifier
         match connectRes with
@@ -574,7 +574,7 @@ type internal TransportStream =
 
     static member internal AcceptFromTransportListener (transportListener: TransportListener)
                                                            : Async<Result<TransportStream, HandshakeError>> = async {
-        let! clientRes = TransportStream.TcpOrTorAcceptAny transportListener.Listener
+        let! clientRes = TransportStream.AcceptAny transportListener.Listener
         match clientRes with
         | Error socketError -> return Error <| TcpAccept socketError
         | Ok transportClient ->

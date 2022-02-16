@@ -150,14 +150,14 @@ type internal ConnectedChannel =
     static member internal ConnectFromWallet (channelStore: ChannelStore)
                                              (nodeMasterPrivKey: NodeMasterPrivKey)
                                              (channelId: ChannelIdentifier)
-                                             (nOnionEndPoint: Option<NOnionEndPoint>)
+                                             (nonionEndPoint: Option<NOnionEndPoint>)
                                                  : Async<Result<ConnectedChannel, ReconnectError>> = async {
         let! serializedChannel, channel =
             ConnectedChannel.LoadChannel channelStore nodeMasterPrivKey channelId
         let! connectRes =
             let nodeId = channel.RemoteNodeId
             let nodeIdentifier =
-                match nOnionEndPoint with
+                match nonionEndPoint with
                 | Some introPoint ->
                     NodeIdentifier.TorEndPoint introPoint
                 | None ->

@@ -310,14 +310,14 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
 
     member internal self.SendMonoHopPayment (channelId: ChannelIdentifier)
                                             (transferAmount: TransferAmount)
-                                            (nOnionEndPoint: Option<NOnionEndPoint>)
+                                            (nonionEndPoint: Option<NOnionEndPoint>)
                                                 : Async<Result<unit, IErrorMsg>> = async {
         let amount =
             let btcAmount = transferAmount.ValueToSend
             let lnAmount = int64(btcAmount * decimal DotNetLightning.Utils.LNMoneyUnit.BTC)
             DotNetLightning.Utils.LNMoney lnAmount
         let! activeChannelRes =
-            ActiveChannel.ConnectReestablish self.ChannelStore nodeMasterPrivKey channelId nOnionEndPoint
+            ActiveChannel.ConnectReestablish self.ChannelStore nodeMasterPrivKey channelId nonionEndPoint
         match activeChannelRes with
         | Error reconnectActiveChannelError ->
             if reconnectActiveChannelError.PossibleBug then
