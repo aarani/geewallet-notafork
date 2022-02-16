@@ -38,9 +38,9 @@ module internal TorOperations =
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
 
-    let internal TorConnect directory introductionPointPublicInfo =
+    let internal TorConnect directory introductionPoint =
         async {
             return! FSharpUtil.Retry<TorServiceClient, NOnionException>
-                (fun _ -> TorServiceClient.Connect directory introductionPointPublicInfo)
+                (fun _ -> TorServiceClient.Connect directory introductionPoint)
                 Config.TOR_CONNECTION_RETRY_COUNT
         }

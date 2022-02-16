@@ -382,8 +382,8 @@ module LayerTwo =
                         async {
                             let nodeClient = Lightning.Connection.StartClient channelStore password
 
-                            let introductionPoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType currency
-                            let! closeRes = Lightning.Network.CloseChannel nodeClient channelId introductionPoint
+                            let connectionString = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType currency
+                            let! closeRes = Lightning.Network.CloseChannel nodeClient channelId connectionString
                             match closeRes with
                             | Error closeError ->
                                 Console.WriteLine(sprintf "Error closing channel: %s" (closeError :> IErrorMsg).Message)
@@ -461,14 +461,14 @@ module LayerTwo =
             | Some channelId ->
                 let channelInfo = channelStore.ChannelInfo channelId
                 let transferAmountOpt = UserInteraction.AskLightningAmount channelInfo
-                let nonionIntroductionPointPublicInfo = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
+                let connectionString = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
                 match transferAmountOpt with
                 | None -> ()
                 | Some transferAmount ->
                     let trySendPayment password =
                         async {
                             let nodeClient = Lightning.Connection.StartClient channelStore password
-                            let! paymentRes = Lightning.Network.SendMonoHopPayment nodeClient channelId transferAmount nonionIntroductionPointPublicInfo
+                            let! paymentRes = Lightning.Network.SendMonoHopPayment nodeClient channelId transferAmount connectionString
                             match paymentRes with
                             | Error nodeSendMonoHopPaymentError ->
                                 let currency = (account :> IAccount).Currency
@@ -566,11 +566,11 @@ module LayerTwo =
                     then press any key to continue."
                 Console.ReadKey true |> ignore
 
-                let nonionEndpoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType currency
+                let connectionString = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType currency
                 let tryLock password =
                     async {
                         let nodeClient = Lightning.Connection.StartClient channelStore password
-                        let sublockFundingAsync = Lightning.Network.ConnectLockChannelFunding nodeClient channelId nonionEndpoint
+                        let sublockFundingAsync = Lightning.Network.ConnectLockChannelFunding nodeClient channelId connectionString
                         return! lockChannelInternal (Node.Client nodeClient) sublockFundingAsync
                     }
 
@@ -633,14 +633,14 @@ module LayerTwo =
                     | 1 -> Some ()
                     | _ -> readInput()
 
-            let nonionEndpoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
+            let connectionString = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
 
             match readInput() with
             | Some () ->
                 let tryUpdateFee password =
                     async {
                         let nodeClient = Lightning.Connection.StartClient channelStore password
-                        let! updateFeeRes = (Node.Client nodeClient).UpdateFee channelId feeRate nonionEndpoint
+                        let! updateFeeRes = (Node.Client nodeClient).UpdateFee channelId feeRate connectionString
                         match updateFeeRes with
                         | Error updateFeeError ->
                             Console.WriteLine(sprintf "Error updating fee: %s" updateFeeError.Message)
