@@ -105,14 +105,14 @@ type IncomingConnectionMethod =
 
 type EndPointType =
     | Tcp of NodeEndPoint
-    | Tor of NOnionEndpoint
+    | Tor of NOnionEndPoint
 
     override self.ToString() =
         match self with
-        | Tcp tcpEndpoint ->
-            tcpEndpoint.ToString()
-        | Tor torEndpoint ->
-            torEndpoint.ToString()
+        | Tcp tcpEndPoint ->
+            tcpEndPoint.ToString()
+        | Tor torEndPoint ->
+            torEndPoint.ToString()
 
 type internal TransportListener =
     internal {
@@ -129,8 +129,8 @@ type internal TransportListener =
                 // TODO: stop the TorServiceHost (how do we do that?)
                 ()
 
-    static member internal TcpBind (nodeMasterPrivKey: NodeMasterPrivKey) (endpoint: IPEndPoint) =
-        let listener = new TcpListener (endpoint)
+    static member internal TcpBind (nodeMasterPrivKey: NodeMasterPrivKey) (endPoint: IPEndPoint) =
+        let listener = new TcpListener (endPoint)
         listener.ExclusiveAddressUse <- false
         listener.Server.SetSocketOption(
             SocketOptionLevel.Socket,
@@ -142,7 +142,7 @@ type internal TransportListener =
         {
             NodeMasterPrivKey = nodeMasterPrivKey
             Listener = IncomingConnectionMethod.Tcp listener
-            NodeServerType = NodeServerType.Tcp (Some endpoint)
+            NodeServerType = NodeServerType.Tcp endPoint
         }
 
     member internal self.LocalIPEndPoint: Option<IPEndPoint> =
@@ -171,10 +171,8 @@ type internal TransportListener =
         (nodeServerType: NodeServerType) =
         async {
             match nodeServerType with
-            | NodeServerType.Tcp (Some bindAddress) -> return TransportListener.TcpBind nodeMasterPrivKey bindAddress
-            | NodeServerType.Tcp None ->
-                // TODO: discuss what's the best error message here.
-                return failwith "Unreachable because missing bindAddress"
+            | NodeServerType.Tcp bindAddress ->
+                return TransportListener.TcpBind nodeMasterPrivKey bindAddress
             | NodeServerType.Tor -> return! TransportListener.TorBind nodeMasterPrivKey
         }
 
@@ -188,10 +186,10 @@ type internal TransportListener =
         let nodeId = PublicKey self.PubKey
         match self.Listener with
         | IncomingConnectionMethod.Tcp tcp ->
-            let localIpEndpoint = tcp.LocalEndpoint :?> IPEndPoint
-            EndPointType.Tcp (NodeEndPoint.FromParts nodeId localIpEndpoint)
+            let localIpEndPoint = tcp.LocalEndpoint :?> IPEndPoint
+            EndPointType.Tcp (NodeEndPoint.FromParts nodeId localIpEndPoint)
         | IncomingConnectionMethod.Tor tor ->
-            EndPointType.Tor ({ NOnionEndpoint.NodeId = nodeId; IntroductionPoint = tor.Export() })
+            EndPointType.Tor ({ NOnionEndPoint.NodeId = nodeId; IntroductionPoint = tor.Export() })
 
 
 type PeerErrorMessage =
@@ -328,15 +326,15 @@ type internal TransportStream =
             return Error socketExceptions
         }
 
-    static member private TorConnect (nOnionEndpoint: NOnionEndpoint)
+    static member private TorConnect (nOnionEndPoint: NOnionEndPoint)
                                         : Async<Result<TorServiceClient, seq<SocketException>>> = async {
-        let introductionIpEndPoint = ((IPAddress.Parse nOnionEndpoint.IntroductionPoint.Address, nOnionEndpoint.IntroductionPoint.Port) |> IPEndPoint)
+        let introductionIpEndPoint = ((IPAddress.Parse nOnionEndPoint.IntroductionPoint.Address, nOnionEndPoint.IntroductionPoint.Port) |> IPEndPoint)
         Infrastructure.LogDebug <| SPrintF1 "Connecting over TOR to %A..." introductionIpEndPoint
 
         let! directory = TorOperations.GetTorDirectory()
         try
-            let! torClient = TorOperations.TorConnect directory nOnionEndpoint.IntroductionPoint
-            Infrastructure.LogDebug <| SPrintF1 "Connected %s" nOnionEndpoint.IntroductionPoint.Address
+            let! torClient = TorOperations.TorConnect directory nOnionEndPoint.IntroductionPoint
+            Infrastructure.LogDebug <| SPrintF1 "Connected %s" nOnionEndPoint.IntroductionPoint.Address
             return Ok torClient
         with
         | ex ->
@@ -484,8 +482,8 @@ type internal TransportStream =
             match nodeIdentifier with
             | NodeIdentifier.TcpEndPoint nodeEndPoint ->
                 (nodeEndPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
-            | NodeIdentifier.TorEndPoint nOnionEndpoint ->
-                (nOnionEndpoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
+            | NodeIdentifier.TorEndPoint nOnionEndPoint ->
+                (nOnionEndPoint.NodeId.ToString() |> NBitcoin.PubKey |> NodeId)
 
         let! connectRes = TransportStream.TransportConnect None nodeIdentifier
         match connectRes with

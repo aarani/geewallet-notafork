@@ -32,7 +32,7 @@ and internal PeerNode =
     {
         InitMsg: InitMsg
         MsgStream: MsgStream
-        NodeServerType: NodeServerType
+        NodeTransportType: NodeTransportType
     }
     interface IDisposable with
         member self.Dispose() =
@@ -45,16 +45,16 @@ and internal PeerNode =
         match connectRes with
         | Error connectError -> return Error connectError
         | Ok (initMsg, msgStream) ->
-            let nodeServerType =
+            let nodeClientType =
                 match nodeIndentifier with
                 | NodeIdentifier.TorEndPoint _ ->
-                    NodeServerType.Tor
-                | NodeIdentifier.TcpEndPoint _ ->
-                    NodeServerType.Tcp None
+                    NodeClientType.Tor
+                | NodeIdentifier.TcpEndPoint nodeEndPoint ->
+                    NodeClientType.Tcp nodeEndPoint.IPEndPoint
             return Ok {
                 InitMsg = initMsg
                 MsgStream = msgStream
-                NodeServerType = nodeServerType
+                NodeTransportType = NodeTransportType.Client nodeClientType
             }
     }
 
@@ -70,7 +70,7 @@ and internal PeerNode =
                 return Ok {
                     InitMsg = initMsg
                     MsgStream = msgStream
-                    NodeServerType = transportListener.NodeServerType
+                    NodeTransportType = NodeTransportType.Server transportListener.NodeServerType
                 }
             else
                 (msgStream :> IDisposable).Dispose()
@@ -86,7 +86,7 @@ and internal PeerNode =
             return Ok {
                 InitMsg = initMsg
                 MsgStream = msgStream
-                NodeServerType = transportListener.NodeServerType
+                NodeTransportType = NodeTransportType.Server transportListener.NodeServerType
             }
     }
 

@@ -198,7 +198,7 @@ type ServerWalletInstance private (wallet: WalletInstance, nodeServer: NodeServe
     static member New (listenEndpoint: IPEndPoint) (privateKeyOpt: Option<Key>): Async<ServerWalletInstance> = async {
         let! wallet = WalletInstance.New privateKeyOpt
         let! nodeServer =
-            Connection.StartServer wallet.ChannelStore wallet.Password (NodeServerType.Tcp (Some listenEndpoint))
+            Connection.StartServer wallet.ChannelStore wallet.Password (listenEndpoint |> NodeServerType.Tcp)
         return new ServerWalletInstance(wallet, nodeServer)
     }
 
@@ -226,6 +226,6 @@ type ServerWalletInstance private (wallet: WalletInstance, nodeServer: NodeServe
         wallet.FundByMining bitcoind lnd
 
     member __.NodeServer: NodeServer = nodeServer
-    member self.EndPointType =
+    member self.NodeEndPoint =
         Lightning.Network.EndPoint self.NodeServer
 

@@ -10,7 +10,7 @@ open NOnion.Services
 open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
 
-type NOnionEndpoint =
+type NOnionEndPoint =
     {
         NodeId: PublicKey
         IntroductionPoint: IntroductionPointPublicInfo
@@ -19,8 +19,8 @@ type NOnionEndpoint =
     static member IsNOnionConnection(text: string): bool =
         text.StartsWith "geewallet+nonion://"
 
-    static member Parse (currency: Currency) (text: string) : NOnionEndpoint =
-        if not (NOnionEndpoint.IsNOnionConnection text) then
+    static member Parse (currency: Currency) (text: string) : NOnionEndPoint =
+        if not (NOnionEndPoint.IsNOnionConnection text) then
             raise <| FormatException "Not an onion address"
 
         let uri = System.Uri text
@@ -68,15 +68,23 @@ type NOnionEndpoint =
 
 type NodeIdentifier =
     | TcpEndPoint of NodeEndPoint
-    | TorEndPoint of NOnionEndpoint
+    | TorEndPoint of NOnionEndPoint
 
     override self.ToString() =
         match self with
-        | NodeIdentifier.TcpEndPoint endpoint ->
-            endpoint.ToString()
-        | NodeIdentifier.TorEndPoint nendpoint ->
-            nendpoint.ToString()
+        | NodeIdentifier.TcpEndPoint endPoint ->
+            endPoint.ToString()
+        | NodeIdentifier.TorEndPoint torEndPoint ->
+            torEndPoint.ToString()
 
 type NodeServerType =
-    | Tcp of Option<IPEndPoint>
+    | Tcp of bindAddress: IPEndPoint
     | Tor
+
+type NodeClientType =
+    | Tcp of counterPartyIP: IPEndPoint
+    | Tor
+
+type NodeTransportType =
+    | Server of NodeServerType
+    | Client of NodeClientType

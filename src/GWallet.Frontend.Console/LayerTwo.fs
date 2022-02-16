@@ -65,8 +65,8 @@ module LayerTwo =
                 "Do you want to supply the channel counterparty connection string as used embedded in QR codes (if the recipient is geewallet say Yes)?"
         if useQRString then
             let getNodeType (currency: Currency) (text: string): NodeIdentifier =
-                if NOnionEndpoint.IsNOnionConnection text then
-                    NodeIdentifier.TorEndPoint (NOnionEndpoint.Parse currency text)
+                if NOnionEndPoint.IsNOnionConnection text then
+                    NodeIdentifier.TorEndPoint (NOnionEndPoint.Parse currency text)
                 else
                     NodeIdentifier.TcpEndPoint (NodeEndPoint.Parse currency text)
 
@@ -117,7 +117,7 @@ module LayerTwo =
         match text with
         | "1" ->
             let bindAddress = AskBindAddress()
-            NodeServerType.Tcp (Some bindAddress)
+            NodeServerType.Tcp bindAddress
         | "2" ->
             NodeServerType.Tor
         | _ -> AskConnectionType()
@@ -382,7 +382,7 @@ module LayerTwo =
                         async {
                             let nodeClient = Lightning.Connection.StartClient channelStore password
 
-                            let introductionPoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeServerType currency
+                            let introductionPoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType currency
                             let! closeRes = Lightning.Network.CloseChannel nodeClient channelId introductionPoint
                             match closeRes with
                             | Error closeError ->
@@ -461,7 +461,7 @@ module LayerTwo =
             | Some channelId ->
                 let channelInfo = channelStore.ChannelInfo channelId
                 let transferAmountOpt = UserInteraction.AskLightningAmount channelInfo
-                let nonionIntroductionPointPublicInfo = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeServerType channelInfo.Currency
+                let nonionIntroductionPointPublicInfo = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
                 match transferAmountOpt with
                 | None -> ()
                 | Some transferAmount ->
@@ -491,9 +491,15 @@ module LayerTwo =
             | Some channelId ->
                 let channelInfo = channelStore.ChannelInfo channelId
 
+                let nodeServerType =
+                    match channelInfo.NodeTransportType with
+                    | NodeTransportType.Server nodeServerType ->
+                        nodeServerType
+                    | NodeTransportType.Client _ ->
+                        failwith "MaybeAskChannelId should not return an outgoing (funder) channel"
                 let tryReceiveLightningEvent password =
                     async {
-                        use! nodeServer = Lightning.Connection.StartServer channelStore password channelInfo.NodeServerType
+                        use! nodeServer = Lightning.Connection.StartServer channelStore password nodeServerType
 
                         match Lightning.Network.EndPoint nodeServer with
                         | EndPointType.Tor endPoint ->
@@ -560,7 +566,7 @@ module LayerTwo =
                     then press any key to continue."
                 Console.ReadKey true |> ignore
 
-                let nonionEndpoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeServerType currency
+                let nonionEndpoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType currency
                 let tryLock password =
                     async {
                         let nodeClient = Lightning.Connection.StartClient channelStore password
@@ -627,7 +633,7 @@ module LayerTwo =
                     | 1 -> Some ()
                     | _ -> readInput()
 
-            let nonionEndpoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeServerType channelInfo.Currency
+            let nonionEndpoint = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
 
             match readInput() with
             | Some () ->

@@ -814,19 +814,22 @@ module UserInteraction =
                 Console.WriteLine("Try again or leave blank to abort.")
                 Ask parser msg
 
-    let rec internal MaybeAskChannelConnectionString nodeServerType currency: Option<NOnionEndpoint> =
-        match nodeServerType with
-        | NodeServerType.Tor ->
-            let getNodeType currency text =
-                if text = String.Empty then
-                    None
-                else
-                    if NOnionEndpoint.IsNOnionConnection text then
-                        Some (NOnionEndpoint.Parse currency text)
+    let internal MaybeAskChannelConnectionString nodeTransportType currency: Option<NOnionEndPoint> =
+        match nodeTransportType with
+        | NodeTransportType.Client NodeClientType.Tor ->
+            let rec innerAskChannelConnectionString () =
+                let getNodeType currency text =
+                    if NOnionEndPoint.IsNOnionConnection text then
+                        NOnionEndPoint.Parse currency text
                     else
-                        MaybeAskChannelConnectionString nodeServerType currency
+                        Console.Error.WriteLine "Invalid channel connection string (it should start with geewallet+nonion://)"
+                        innerAskChannelConnectionString ()
 
-            match Ask (getNodeType currency) "Channel counterparty QR connection string contents" with
-            | Some introductionPoint -> introductionPoint
-            | _ -> None
+                match Ask (getNodeType currency) "Channel counterparty QR connection string contents" with
+                | Some connectionString ->
+                    connectionString
+                | None ->
+                    innerAskChannelConnectionString ()
+
+            innerAskChannelConnectionString () |> Some
         | _ -> None

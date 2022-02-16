@@ -150,23 +150,26 @@ type internal ConnectedChannel =
     static member internal ConnectFromWallet (channelStore: ChannelStore)
                                              (nodeMasterPrivKey: NodeMasterPrivKey)
                                              (channelId: ChannelIdentifier)
-                                             (nOnionEndpoint: Option<NOnionEndpoint>)
+                                             (nOnionEndPoint: Option<NOnionEndPoint>)
                                                  : Async<Result<ConnectedChannel, ReconnectError>> = async {
         let! serializedChannel, channel =
             ConnectedChannel.LoadChannel channelStore nodeMasterPrivKey channelId
         let! connectRes =
             let nodeId = channel.RemoteNodeId
             let nodeIdentifier =
-                match nOnionEndpoint with
+                match nOnionEndPoint with
                 | Some introPoint ->
                     NodeIdentifier.TorEndPoint introPoint
-                | _ ->
-                    match serializedChannel.CounterpartyIP with
-                    | Some counterPartyIP ->
-                        NodeIdentifier.TcpEndPoint { NodeEndPoint.NodeId = PublicKey nodeId.Value; IPEndPoint = counterPartyIP }
-                    | None ->
-                        // TODO: add better message
-                        failwith "CounterPartyIP must be specified for TCP connections"
+                | None ->
+                    match serializedChannel.NodeTransportType with
+                    | NodeTransportType.Client (NodeClientType.Tcp counterPartyIP) ->
+                        NodeIdentifier.TcpEndPoint
+                            {
+                                NodeEndPoint.NodeId = PublicKey nodeId.Value
+                                IPEndPoint = counterPartyIP
+                            }
+                    | _ ->
+                        failwith "Unreachable because channel's user is fundee and not the funder"
             PeerNode.Connect nodeMasterPrivKey nodeIdentifier
         match connectRes with
         | Error connectError -> return Error <| Connect connectError
@@ -229,10 +232,9 @@ type internal ConnectedChannel =
             NegotiatingState = self.Channel.Channel.NegotiatingState
             Commitments = self.Channel.Channel.Commitments
             AccountFileName = self.Account.AccountFile.Name
-            CounterpartyIP = self.PeerNode.RemoteEndPoint
             ForceCloseTxIdOpt = None            
             LocalChannelPubKeys = self.Channel.ChannelPrivKeys.ToChannelPubKeys()
-            NodeServerType = self.PeerNode.NodeServerType
+            NodeTransportType = self.PeerNode.NodeTransportType
             RecoveryTxIdOpt = None
         }
         channelStore.SaveChannel serializedChannel

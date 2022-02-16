@@ -70,7 +70,7 @@ type LN() =
             let! feeRate = ElectrumServer.EstimateFeeRate()
             let acceptChannelTask = Lightning.Network.AcceptChannel serverWallet.NodeServer
             let openChannelTask = async {
-                match serverWallet.EndPointType with
+                match serverWallet.NodeEndPoint with
                 | EndPointType.Tcp endPoint ->
                     do! lnd.ConnectTo endPoint
                     return!
@@ -563,7 +563,7 @@ type LN() =
             let fundingOutPointIndex = channelInfo.FundingOutPointIndex
             OutPoint(fundingTxId, fundingOutPointIndex)
         let closeChannelTask = async {
-            match serverWallet.EndPointType with
+            match serverWallet.NodeEndPoint with
             | EndPointType.Tcp endPoint ->
                 do! lnd.ConnectTo endPoint
                 do! Async.Sleep 1000

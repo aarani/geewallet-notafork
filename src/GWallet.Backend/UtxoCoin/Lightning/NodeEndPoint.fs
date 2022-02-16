@@ -15,13 +15,13 @@ type NodeEndPoint =
     static member Parse (currency: Currency) (text: string): NodeEndPoint =
         let atIndex = text.IndexOf "@"
         if atIndex = -1 then
-            raise <| FormatException "No '@' in endpoint string"
+            raise <| FormatException "No '@' in endPoint string"
         let nodeIdText = text.[..atIndex - 1]
         let ipEndPointText = text.[atIndex + 1 ..]
 
         let portSeparatorIndex = ipEndPointText.LastIndexOf ':'
         if portSeparatorIndex = -1 then
-            raise <| FormatException "No ':' after '@' in endpoint string"
+            raise <| FormatException "No ':' after '@' in endPoint string"
         let ipAddressText = ipEndPointText.[..portSeparatorIndex - 1]
         let portText = ipEndPointText.[portSeparatorIndex + 1 ..]
 

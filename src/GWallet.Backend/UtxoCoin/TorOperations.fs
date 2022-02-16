@@ -11,7 +11,7 @@ open GWallet.Backend
 
 
 module internal TorOperations =
-    let GetRandomTorFallbackDirectoryEndpoint() =
+    let GetRandomTorFallbackDirectoryEndPoint() =
         match Caching.Instance.GetServers
             (ServerType.ProtocolServer ServerProtocol.Tor)
             |> Shuffler.Unsort
@@ -27,7 +27,7 @@ module internal TorOperations =
     let internal GetTorDirectory(): Async<TorDirectory> =
         async {
             return! FSharpUtil.Retry<TorDirectory, NOnionException>
-                (fun _ -> TorDirectory.Bootstrap (GetRandomTorFallbackDirectoryEndpoint()))
+                (fun _ -> TorDirectory.Bootstrap (GetRandomTorFallbackDirectoryEndPoint()))
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
 
