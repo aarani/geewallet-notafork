@@ -96,10 +96,12 @@ type internal MsgStream =
         featureBits
 
     static member private InitializeTransportStream (transportStream: TransportStream)
+                                                    (fundingAmount: Money)
+                                                    (currency: Currency)
                                                         : Async<Result<InitMsg * MsgStream, InitializeError>> = async {
         let! transportStreamAfterInitSent =
             let plainInit: InitMsg = {
-                Features = MsgStream.SupportedFeatures
+                Features = Settings.SupportedFeatures fundingAmount currency
                 TLVStream = [||]
             }
             let msg = plainInit :> ILightningMsg
@@ -123,6 +125,8 @@ type internal MsgStream =
 
     static member internal Connect (nodeMasterPrivKey: NodeMasterPrivKey)
                                    (nodeIdentifier: NodeIdentifier)
+                                   (fundingAmount: Money)
+                                   (currency: Currency)
                                        : Async<Result<InitMsg * MsgStream, ConnectError>> = async {
         let! transportStreamRes =
             TransportStream.Connect
@@ -131,20 +135,22 @@ type internal MsgStream =
         match transportStreamRes with
         | Error handshakeError -> return Error <| Handshake handshakeError
         | Ok transportStream -> 
-            let! initializeRes = MsgStream.InitializeTransportStream transportStream
+            let! initializeRes = MsgStream.InitializeTransportStream transportStream fundingAmount currency
             match initializeRes with
             | Error initializeError -> return Error <| Initialize initializeError
             | Ok (initMsg, msgStream) -> return Ok (initMsg, msgStream)
     }
 
     static member internal AcceptFromTransportListener (transportListener: TransportListener)
+                                                       (fundingAmount: Money)
+                                                       (currency: Currency)
                                                            : Async<Result<InitMsg * MsgStream, ConnectError>> = async {
         let! transportStreamRes =
             TransportStream.AcceptFromTransportListener transportListener
         match transportStreamRes with
         | Error handshakeError -> return Error <| Handshake handshakeError
         | Ok transportStream ->
-            let! initializeRes = MsgStream.InitializeTransportStream transportStream
+            let! initializeRes = MsgStream.InitializeTransportStream transportStream fundingAmount currency
             match initializeRes with
             | Error initializeError -> return Error <| Initialize initializeError
             | Ok (initMsg, msgStream) -> return Ok (initMsg, msgStream)

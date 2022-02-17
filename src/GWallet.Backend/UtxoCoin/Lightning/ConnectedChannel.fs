@@ -170,7 +170,11 @@ type internal ConnectedChannel =
                             }
                     | _ ->
                         failwith "Unreachable because channel's user is fundee and not the funder"
-            PeerNode.Connect nodeMasterPrivKey nodeIdentifier
+            PeerNode.Connect
+                nodeMasterPrivKey
+                nodeIdentifier
+                (serializedChannel.Capacity())
+                channelStore.Currency
         match connectRes with
         | Error connectError -> return Error <| Connect connectError
         | Ok peerNode ->
@@ -197,11 +201,14 @@ type internal ConnectedChannel =
                                                 : Async<Result<ConnectedChannel, ReconnectError>> = async {
         let! serializedChannel, channel =
             ConnectedChannel.LoadChannel channelStore transportListener.NodeMasterPrivKey channelId
+        //HACK: we don't know the funding amount here
         let! connectRes =
             let nodeId = channel.RemoteNodeId
             PeerNode.AcceptFromTransportListener
                 transportListener
                 nodeId
+                Money.Zero
+                channelStore.Currency
         match connectRes with
         | Error connectError -> return Error <| Connect connectError
         | Ok peerNode ->
