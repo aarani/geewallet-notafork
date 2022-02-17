@@ -54,7 +54,7 @@ module Settings =
         MaxToSelfDelay = MaxToSelfDelay currency
     }
 
-    let private SupportedFeatures (funding: Money) (currency: Currency) =
+    let internal SupportedFeatures (funding: Money) (currency: Currency) =
         let featureBits = FeatureBits.Zero
         featureBits.SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true
         if currency = Currency.LTC then
