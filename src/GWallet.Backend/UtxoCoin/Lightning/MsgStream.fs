@@ -90,11 +90,6 @@ type internal MsgStream =
         member self.Dispose() =
             (self.TransportStream :> IDisposable).Dispose()
 
-    static member internal SupportedFeatures: FeatureBits =
-        let featureBits = FeatureBits.Zero
-        featureBits.SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true
-        featureBits
-
     static member private InitializeTransportStream (transportStream: TransportStream)
                                                     (fundingAmount: Money)
                                                     (currency: Currency)
