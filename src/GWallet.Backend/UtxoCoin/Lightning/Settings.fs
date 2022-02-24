@@ -57,7 +57,8 @@ module Settings =
     let internal SupportedFeatures (funding: Money) (currency: Currency) =
         let featureBits = FeatureBits.Zero
         featureBits.SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true
-        featureBits.SetFeature Feature.OptionStaticRemoteKey FeaturesSupport.Optional true
+        featureBits.SetFeature Feature.OptionStaticRemoteKey FeaturesSupport.Mandatory true
+        featureBits.SetFeature Feature.OptionAnchorZeroFeeHtlcTx FeaturesSupport.Mandatory true
         if currency = Currency.LTC then
             let featureType =
                 if funding > ChannelConstants.MAX_FUNDING_SATOSHIS then
