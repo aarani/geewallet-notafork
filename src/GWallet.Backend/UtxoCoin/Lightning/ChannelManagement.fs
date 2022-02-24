@@ -420,3 +420,31 @@ module ChannelManager =
             else
                 return false
         }
+
+    let IsCpfpNeededForCommitmentTx
+        (channelStore: ChannelStore)
+        (channelId: ChannelIdentifier)
+        (commitmentTxId: TransactionIdentifier)
+        =
+        async {
+            let channel = channelStore.LoadChannel channelId
+            let fundingScriptCoin = channel.FundingScriptCoin()
+            let currency = channelStore.Currency
+            let network = UtxoCoin.Account.GetNetwork currency
+            let! commitmentTxString =
+                Server.Query
+                    currency
+                    (QuerySettings.Default ServerSelectionMode.Fast)
+                    (ElectrumClient.GetBlockchainTransaction (commitmentTxId.ToString()))
+                    None
+            let commitmentTxFeeRate =
+                let commitmentTx = Transaction.Parse(commitmentTxString, network)
+                commitmentTx.GetFeeRate (Array.singleton (fundingScriptCoin :> ICoin))
+
+            let! currentFeeRate = async {
+                let! feeEstimator = FeeEstimator.Create currency
+                return feeEstimator.FeeRatePerKw.AsNBitcoinFeeRate()
+            }
+
+            return commitmentTxFeeRate.FeePerK < currentFeeRate.FeePerK
+        }

@@ -60,6 +60,7 @@ type internal OutgoingUnfundedChannel =
                               (account: NormalUtxoAccount)
                               (channelCapacity: TransferAmount)
                                   : Async<Result<OutgoingUnfundedChannel, OpenChannelError>> = async {
+        //FIXME: should we throw if remote party can't create anchor channel
         let currency = (account:>IAccount).Currency
         let nodeId = peerNode.RemoteNodeId
         let nodeMasterPrivKey = peerNode.NodeMasterPrivKey()
