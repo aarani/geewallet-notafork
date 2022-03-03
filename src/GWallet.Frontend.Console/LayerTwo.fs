@@ -690,6 +690,7 @@ module LayerTwo =
                     trySendRecoveryTx
                     |> UserInteraction.TryWithPasswordAsync
             else
+                //TODO: implement anchor fee bump
                 return seq {
                     yield! UserInteraction.DisplayLightningChannelStatus channelInfo
                     yield sprintf "        channel force-closed"
@@ -721,23 +722,23 @@ module LayerTwo =
         (closingTxHeightOpt: Option<uint32>)
         : Async<seq<string>> =
         async {
-            Console.WriteLine(sprintf "Channel %s has been force-closed by the counterparty." (ChannelId.ToString channelInfo.ChannelId))
-            Console.WriteLine txRecoveryMsg
-            let tryClaimFunds password =
-                async {
-                    let nodeClient = Lightning.Connection.StartClient channelStore password
-                    let sendTx =
-                        if closingTxHeightOpt.IsNone then
-                            Console.WriteLine "The remote party tried to perform a forced closing of the channel (probably because it couldn't contact your node) recently (or not so recently if your device has been offline for a while), but their transaction didn't confirm yet."
-                            UserInteraction.AskYesNo "Do you want to send an extra transaction (increasing the fee) that helps the channel to get closed faster? If you don't, your funds in the channel will not be recovered yet."
-                        else
-                            true
-                    if sendTx then
+            if closingTxHeightOpt.IsNone then
+                //TODO: implement anchor fee bump
+                return seq {
+                    yield! UserInteraction.DisplayLightningChannelStatus channelInfo
+                    yield "        channel closed by counterparty"
+                    yield "        wait for 1 confirmation to recover your funds"
+                }
+            else
+                Console.WriteLine(sprintf "Channel %s has been force-closed by the counterparty." (ChannelId.ToString channelInfo.ChannelId))
+                Console.WriteLine txRecoveryMsg
+                let tryClaimFunds password =
+                    async {
+                        let nodeClient = Lightning.Connection.StartClient channelStore password
                         let! recoveryTxResult =
                             (Node.Client nodeClient).CreateRecoveryTxForRemoteForceClose
                                 channelInfo.ChannelId
                                 closingTx
-                                closingTxHeightOpt.IsNone
                         match recoveryTxResult with
                         | Ok recoveryTx ->
                             if UserInteraction.ConfirmRecoveryTxFee recoveryTx.Fee then
@@ -762,15 +763,9 @@ module LayerTwo =
                                 yield "        channel closed by counterparty"
                                 yield "        Local channel balance was too small (below the \"dust\" limit) so no funds were recovered."
                             }
-                    else
-                        return seq {
-                            yield! UserInteraction.DisplayLightningChannelStatus channelInfo
-                            yield "        channel closed by counterparty"
-                            yield "        remote party's force-close transaction confirmation in progress"
-                        }
-                }
+                    }
 
-            return! UserInteraction.TryWithPasswordAsync tryClaimFunds
+                return! UserInteraction.TryWithPasswordAsync tryClaimFunds
         }
 
 

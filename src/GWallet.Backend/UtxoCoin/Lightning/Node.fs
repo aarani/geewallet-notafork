@@ -3,6 +3,7 @@ namespace GWallet.Backend.UtxoCoin.Lightning
 open System
 open System.IO
 open System.Net
+open System.Linq
 
 open NBitcoin
 open DotNetLightning.Chain
@@ -17,6 +18,7 @@ open NOnion.Network
 
 open GWallet.Backend
 open GWallet.Backend.UtxoCoin
+open GWallet.Backend.UtxoCoin.Account
 open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
 
@@ -682,6 +684,122 @@ type Node =
         | Server nodeServer -> nodeServer.Account
         :> IAccount
 
+    member self.CreateAnchorFeeBumpForForceClose
+        (channelId: ChannelIdentifier)
+        (commitmentTxString: string)
+        (password: string)
+        : Async<Result<FeeBumpTx, ClosingBalanceBelowDustLimitError>> =
+            async {
+                let account = self.Account
+                let privateKey = Account.GetPrivateKey (account :?> NormalUtxoAccount) password
+                let nodeMasterPrivKey =
+                    match self with
+                    | Client nodeClient -> nodeClient.NodeMasterPrivKey
+                    | Server nodeServer -> nodeServer.NodeMasterPrivKey
+                let currency = self.Account.Currency
+                let serializedChannel = self.ChannelStore.LoadChannel channelId
+                //FIXME: should we even have this check, considering we want to fully migrate to anchor channels?
+                if serializedChannel.SavedChannelState.StaticChannelConfig.Type <> ChannelType.Anchor then
+                    return failwith "Channel is not an anchor channel"
+                let! feeBumpTransaction = async {
+                    let network =
+                        UtxoCoin.Account.GetNetwork currency
+                    let commitmentTx =
+                        Transaction.Parse(commitmentTxString, network)
+                    let channelPrivKeys =
+                        let channelIndex = serializedChannel.ChannelIndex
+                        nodeMasterPrivKey.ChannelPrivKeys channelIndex
+                    let targetAddress =
+                        let originAddress = self.Account.PublicAddress
+                        BitcoinAddress.Create(originAddress, network)
+                    let! feeRate = async {
+                        let! feeEstimator = FeeEstimator.Create currency
+                        return feeEstimator.FeeRatePerKw
+                    }
+                    let transactionBuilderResult =
+                        ForceCloseFundsRecovery.tryClaimAnchorFromCommitmentTx
+                            channelPrivKeys
+                            serializedChannel.SavedChannelState.StaticChannelConfig
+                            commitmentTx
+                    match transactionBuilderResult with
+                    | Error (LocalAnchorRecoveryError.InvalidCommitmentTx invalidCommitmentTxError) ->
+                        return failwith ("invalid commitment tx for force-closing: " + invalidCommitmentTxError.Message)
+                    | Error LocalAnchorRecoveryError.AnchorNotFound ->
+                        return Error <| ClosingBalanceBelowDustLimit
+                    | Ok transactionBuilder ->
+                        let job = Account.GetElectrumScriptHashFromPublicAddress account.Currency account.PublicAddress
+                                    |> ElectrumClient.GetUnspentTransactionOutputs
+                        let! utxos = Server.Query account.Currency (QuerySettings.Default ServerSelectionMode.Fast) job None
+
+                        if not (utxos.Any()) then
+                            failwith "No UTXOs found!"
+                        let possibleInputs =
+                            seq {
+                                for utxo in utxos do
+                                    yield { UnspentTransactionOutputInfo.TransactionId = utxo.TxHash; OutputIndex = utxo.TxPos; Value = utxo.Value }
+                            }
+
+                        // first ones are the smallest ones
+                        let inputsOrderedByAmount = possibleInputs.OrderBy(fun utxo -> utxo.Value) |> List.ofSeq
+
+                        transactionBuilder.AddKeys privateKey |> ignore<TransactionBuilder>
+                        transactionBuilder.SendAllRemaining targetAddress |> ignore<TransactionBuilder>
+
+                        let requiredParentTxFee = feeRate.AsNBitcoinFeeRate().GetFee commitmentTx
+                        let actualParentTxFee =
+                            commitmentTx.GetFee [| serializedChannel.SavedChannelState.StaticChannelConfig.FundingScriptCoin :> ICoin |]
+                        let deltaParentTxFee = requiredParentTxFee - actualParentTxFee
+
+                        let rec addUtxoForChildFee (unusedUtxos) =
+                            async {
+                                try
+                                    let fees = transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
+                                    return fees, unusedUtxos
+                                with
+                                | :? NBitcoin.NotEnoughFundsException as ex ->
+                                    match unusedUtxos with
+                                    | [] -> return raise <| FSharpUtil.ReRaise ex
+                                    | head::tail ->
+                                        let! newInput = head |> ConvertToInputOutpointInfo account.Currency
+                                        let newCoin = newInput |> ConvertToICoin (account :?> IUtxoAccount)
+                                        transactionBuilder.AddCoins [newCoin] |> ignore<TransactionBuilder>
+                                        return! addUtxoForChildFee tail
+                            }
+
+                        let rec finalize (unusedUtxos) =
+                            async {
+                                try
+                                    return transactionBuilder.BuildTransaction true
+                                with
+                                | :? NBitcoin.NotEnoughFundsException as ex ->
+                                    match unusedUtxos with
+                                    | [] -> return raise <| FSharpUtil.ReRaise ex
+                                    | head::tail ->
+                                        let! newInput = head |> ConvertToInputOutpointInfo account.Currency
+                                        let newCoin = newInput |> ConvertToICoin (account :?> IUtxoAccount)
+                                        transactionBuilder.AddCoins [newCoin] |> ignore<TransactionBuilder>
+                                        return! finalize tail
+                            }
+
+                        let! childFee, unusedUtxos = addUtxoForChildFee inputsOrderedByAmount
+                        transactionBuilder.SendFees (childFee + deltaParentTxFee) |> ignore<TransactionBuilder>
+                        let! transaction = finalize unusedUtxos
+
+                        let feeBumpTransaction: FeeBumpTx =
+                            {
+                                ChannelId = channelId
+                                Currency = currency
+                                Fee = MinerFee ((childFee + deltaParentTxFee).Satoshi, DateTime.UtcNow, currency)
+                                Tx =
+                                    {
+                                        NBitcoinTx = transaction
+                                    }
+                            }
+                        return Ok feeBumpTransaction
+                }
+                return feeBumpTransaction
+            }
+
     member self.CreateRecoveryTxForLocalForceClose
         (channelId: ChannelIdentifier)
         (commitmentTxString: string)
@@ -722,7 +840,7 @@ type Node =
                         transactionBuilder.SendAll targetAddress |> ignore
                         let fee = transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
                         transactionBuilder.SendFees fee |> ignore
-                        let recoveryTransaction =
+                        let recoveryTransaction: RecoveryTx =
                             {
                                 ChannelId = channelId
                                 Currency = currency
@@ -764,7 +882,6 @@ type Node =
     member self.CreateRecoveryTxForRemoteForceClose
         (channelId: ChannelIdentifier)
         (closingTx: ForceCloseTx)
-        (requiresCpfp: bool)
         : Async<Result<RecoveryTx, ClosingBalanceBelowDustLimitError>> =
         async {
             let nodeMasterPrivKey =
@@ -800,17 +917,9 @@ type Node =
                 return Error <| ClosingBalanceBelowDustLimit
             | Ok transactionBuilder ->
                 transactionBuilder.SendAll targetAddress |> ignore
-                let fee =
-                    if requiresCpfp then
-                        FeeEstimator.EstimateCpfpFee
-                            transactionBuilder
-                            feeRate
-                            closingTx.Tx.NBitcoinTx
-                            (serializedChannel.FundingScriptCoin())
-                    else
-                        transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
+                let fee = transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
                 transactionBuilder.SendFees fee |> ignore
-                let recoveryTransaction =
+                let recoveryTransaction: RecoveryTx =
                     {
                         ChannelId = channelId
                         Currency = currency
