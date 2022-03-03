@@ -186,6 +186,7 @@ type internal FundedChannel =
                         Settings.PeerLimits funding currency
                     let fundingTxMinimumDepth =
                         Settings.DefaultTxMinimumDepth currency
+                    //FIXME: should we throw if remote party can't create anchor channel
                     return Channel.NewInbound(
                         peerLimits,
                         channelOptions,
