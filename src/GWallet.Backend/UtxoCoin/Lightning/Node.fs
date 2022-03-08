@@ -725,6 +725,7 @@ type Node =
                     | Error (LocalAnchorRecoveryError.InvalidCommitmentTx invalidCommitmentTxError) ->
                         return failwith ("invalid commitment tx for force-closing: " + invalidCommitmentTxError.Message)
                     | Error LocalAnchorRecoveryError.AnchorNotFound ->
+                        self.ChannelStore.ArchiveChannel channelId
                         return Error <| ClosingBalanceBelowDustLimit
                     | Ok transactionBuilder ->
                         let job = Account.GetElectrumScriptHashFromPublicAddress account.Currency account.PublicAddress
@@ -732,7 +733,7 @@ type Node =
                         let! utxos = Server.Query account.Currency (QuerySettings.Default ServerSelectionMode.Fast) job None
 
                         if not (utxos.Any()) then
-                            failwith "No UTXOs found!"
+                            return raise InsufficientFunds
                         let possibleInputs =
                             seq {
                                 for utxo in utxos do
@@ -756,9 +757,9 @@ type Node =
                                     let fees = transactionBuilder.EstimateFees (feeRate.AsNBitcoinFeeRate())
                                     return fees, unusedUtxos
                                 with
-                                | :? NBitcoin.NotEnoughFundsException as ex ->
+                                | :? NBitcoin.NotEnoughFundsException as _ex ->
                                     match unusedUtxos with
-                                    | [] -> return raise <| FSharpUtil.ReRaise ex
+                                    | [] -> return raise InsufficientFunds
                                     | head::tail ->
                                         let! newInput = head |> ConvertToInputOutpointInfo account.Currency
                                         let newCoin = newInput |> ConvertToICoin (account :?> IUtxoAccount)
@@ -771,9 +772,9 @@ type Node =
                                 try
                                     return transactionBuilder.BuildTransaction true
                                 with
-                                | :? NBitcoin.NotEnoughFundsException as ex ->
+                                | :? NBitcoin.NotEnoughFundsException as _ex ->
                                     match unusedUtxos with
-                                    | [] -> return raise <| FSharpUtil.ReRaise ex
+                                    | [] -> return raise InsufficientFunds
                                     | head::tail ->
                                         let! newInput = head |> ConvertToInputOutpointInfo account.Currency
                                         let newCoin = newInput |> ConvertToICoin (account :?> IUtxoAccount)
