@@ -219,6 +219,10 @@ type ChannelStore(account: NormalUtxoAccount) =
         let serializedChannel = self.LoadChannel channelId
         serializedChannel.SavedChannelState.LocalCommit.PublishableTxs.CommitTx.Value.ToHex()
 
+    member self.TryGetClosingDateTime (channelId: ChannelIdentifier): Option<DateTime> =
+        let serializedChannel = self.LoadChannel channelId
+        serializedChannel.ClosingDateTime
+
     member self.GetToSelfDelay (channelId: ChannelIdentifier): uint16 =
         let serializedChannel = self.LoadChannel channelId
         serializedChannel.SavedChannelState.StaticChannelConfig.LocalParams.ToSelfDelay.Value
@@ -419,4 +423,70 @@ module ChannelManager =
                 return true
             else
                 return false
+        }
+
+    type MutualCloseCpfpCreationError =
+        | BalanceBelowDustLimit
+        | NotEnoughFundForFees
+
+    let CreateCpfpTxOnMutualClose
+        (channelStore: ChannelStore)
+        (channelId: ChannelIdentifier)
+        (closingTx: MutualCloseTx)
+        (password: string)
+        : Async<Result<MutualCloseCpfp, MutualCloseCpfpCreationError>> =
+        async {
+            let account = channelStore.Account
+            //FIXME: readonly?
+            let privateKey = Account.GetPrivateKey account password
+            let serializedChannel = channelStore.LoadChannel channelId
+            let currency = channelStore.Currency
+            let network = UtxoCoin.Account.GetNetwork currency
+            let targetAddress =
+                let originAddress = (account :> IAccount).PublicAddress
+                BitcoinAddress.Create(originAddress, network)
+            let! feeRate = async {
+                let! feeEstimator = FeeEstimator.Create currency
+                return feeEstimator.FeeRatePerKw
+            }
+
+            let localShutdownScriptPubKey =
+                UnwrapOption serializedChannel.NegotiatingState.LocalRequestedShutdown "BUG: local shutdown script is empty"
+
+            let localOutputOpt =
+                closingTx.Tx.NBitcoinTx.Outputs
+                |> Seq.tryFind (fun output -> output.ScriptPubKey = localShutdownScriptPubKey.ScriptPubKey())
+
+            match localOutputOpt with
+            | Some localOutput ->
+                let transactionBuilder = network.CreateTransactionBuilder()
+
+                transactionBuilder.AddKeys privateKey |> ignore<TransactionBuilder>
+                transactionBuilder.AddCoin(ScriptCoin(closingTx.Tx.NBitcoinTx, localOutput, (account :> IUtxoAccount).PublicKey.WitHash.ScriptPubKey)) |> ignore<TransactionBuilder>
+                transactionBuilder.SendAll targetAddress |> ignore<TransactionBuilder>
+                try
+                    let fee =
+                        FeeEstimator.EstimateCpfpFee
+                            transactionBuilder
+                            feeRate
+                            closingTx.Tx.NBitcoinTx
+                            (serializedChannel.FundingScriptCoin())
+                    transactionBuilder.SendFees fee |> ignore
+
+                    let cpfpTransaction: MutualCloseCpfp =
+                        {
+                            ChannelId = channelId
+                            Currency = currency
+                            Fee = MinerFee (fee.Satoshi, DateTime.UtcNow, currency)
+                            Tx =
+                                {
+                                    NBitcoinTx = transactionBuilder.BuildTransaction true
+                                }
+                        }
+                    return Ok cpfpTransaction
+                with
+                | :? NotEnoughFundsException ->
+                    return Error NotEnoughFundForFees
+            | None ->
+                return Error BalanceBelowDustLimit
         }

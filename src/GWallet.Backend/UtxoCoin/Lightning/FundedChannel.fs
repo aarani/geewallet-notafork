@@ -145,6 +145,7 @@ type internal FundedChannel =
                             Account = account
                             MinimumDepth = outgoingUnfundedChannel.MinimumDepth
                             ChannelIndex = outgoingUnfundedChannel.ChannelIndex
+                            ClosingDateTime = None
                         }
                         connectedChannel.SaveToWallet()
                         let! _txid =
@@ -241,6 +242,7 @@ type internal FundedChannel =
                                     Account = account
                                     MinimumDepth = minimumDepth
                                     ChannelIndex = channelIndex
+                                    ClosingDateTime = None
                                 }
                                 connectedChannelAfterFundingCreated.SaveToWallet()
 

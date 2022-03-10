@@ -164,10 +164,11 @@ type LN() =
                 if attempt = 10 then
                     return Error "Closing tx not confirmed after maximum attempts"
                 else
-                    let! txIsConfirmed = Lightning.Network.CheckClosingFinished clientWallet.ChannelStore channelId
-                    if txIsConfirmed then
+                    let! closingTxResult = Lightning.Network.CheckClosingFinished clientWallet.ChannelStore channelId
+                    match closingTxResult with
+                    | Tx (Full, _closingTx) ->
                         return Ok ()
-                    else
+                    | _ ->
                         do! Async.Sleep 1000
                         return! waitForClosingTxConfirmed (attempt + 1)
             }
@@ -517,10 +518,11 @@ type LN() =
             if attempt = 10 then
                 return Error "Closing tx not confirmed after maximum attempts"
             else
-                let! txIsConfirmed = Lightning.Network.CheckClosingFinished clientWallet.ChannelStore channelId
-                if txIsConfirmed then
+                let! closingTxResult = Lightning.Network.CheckClosingFinished clientWallet.ChannelStore channelId
+                match closingTxResult with
+                | Tx (Full, _closingTx) ->
                     return Ok ()
-                else
+                | _ ->
                     do! Async.Sleep 1000
                     return! waitForClosingTxConfirmed (attempt + 1)
         }

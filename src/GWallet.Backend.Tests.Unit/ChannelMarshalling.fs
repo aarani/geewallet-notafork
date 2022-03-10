@@ -331,7 +331,8 @@ type ChannelMarshalling () =
           "case": "Tor"
         }
       ]
-    }
+    },
+    "closingDateTime": null
   }
 }
 

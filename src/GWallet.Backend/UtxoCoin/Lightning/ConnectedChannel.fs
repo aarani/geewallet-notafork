@@ -75,6 +75,7 @@ type internal ConnectedChannel =
         Account: NormalUtxoAccount
         MinimumDepth: BlockHeightOffset32
         ChannelIndex: int
+        ClosingDateTime: Option<DateTime>
     }
     interface IDisposable with
         member self.Dispose() =
@@ -191,6 +192,7 @@ type internal ConnectedChannel =
                     PeerNode = peerNodeAfterReestablish
                     MinimumDepth = minimumDepth
                     ChannelIndex = channelIndex
+                    ClosingDateTime = serializedChannel.ClosingDateTime
                 }
                 return Ok connectedChannel
     }
@@ -224,6 +226,7 @@ type internal ConnectedChannel =
                     PeerNode = peerNodeAfterReestablish
                     MinimumDepth = minimumDepth
                     ChannelIndex = channelIndex
+                    ClosingDateTime = serializedChannel.ClosingDateTime
                 }
                 return Ok connectedChannel
     }
@@ -242,6 +245,7 @@ type internal ConnectedChannel =
             LocalChannelPubKeys = self.Channel.ChannelPrivKeys.ToChannelPubKeys()
             NodeTransportType = self.PeerNode.NodeTransportType
             RecoveryTxIdOpt = None
+            ClosingDateTime = self.ClosingDateTime
         }
         channelStore.SaveChannel serializedChannel
 
