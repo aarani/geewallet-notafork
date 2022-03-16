@@ -156,6 +156,8 @@ type LN() =
             | ChannelStatus.Closing -> ()
             | status -> return failwith (SPrintF1 "unexpected channel status. Expected Closing, got %A" status)
 
+            do! Async.Sleep 10000
+
             // Mine 10 blocks to make sure closing tx is confirmed
             bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 (uint32 10))
 
@@ -1560,6 +1562,9 @@ type LN() =
                     | Ok mutualCpfp ->
                         return Ok (closingTx, mutualCpfp)
                     | _ -> return Error "Cpfp tx creation failed"
+                | Tx (Full, _) ->
+                    Assert.Inconclusive "Closing tx got confirmed before we get a chance to create cpfp tx"
+                    return Error "Closing tx got confirmed before we get a chance to create cpfp tx"
                 | _ ->
                     do! Async.Sleep 1000
                     return! waitForClosingTxConfirmed (attempt + 1)
