@@ -11,21 +11,22 @@ open GWallet.Backend.UtxoCoin
 open GWallet.Backend.UtxoCoin.Lightning
 
 type internal Operations =
-    | Exit                    = 0
-    | Refresh                 = 1
-    | CreateAccounts          = 2
-    | SendPayment             = 3
-    | AddReadonlyAccounts     = 4
-    | SignOffPayment          = 5
-    | BroadcastPayment        = 6
-    | ArchiveAccount          = 7
-    | PairToWatchWallet       = 8
-    | Options                 = 9
-    | OpenChannel             = 10
-    | AcceptChannel           = 11
-    | SendLightningPayment    = 12
-    | ReceiveLightningEvent   = 13
-    | CloseChannel            = 14
+    | Exit                     = 0
+    | Refresh                  = 1
+    | CreateAccounts           = 2
+    | SendPayment              = 3
+    | AddReadonlyAccounts      = 4
+    | SignOffPayment           = 5
+    | BroadcastPayment         = 6
+    | ArchiveAccount           = 7
+    | PairToWatchWallet        = 8
+    | Options                  = 9
+    | OpenChannel              = 10
+    | AcceptChannel            = 11
+    | SendHtlcLightningPayment = 12
+    | CreateInvoice            = 13
+    | ReceiveLightningEvent    = 14
+    | CloseChannel             = 15
 
 type WhichAccount =
     All of seq<IAccount> | MatchingWith of IAccount
@@ -90,8 +91,9 @@ module UserInteraction =
         | Operations.CreateAccounts -> noHotAccounts
         | Operations.OpenChannel
         | Operations.AcceptChannel
+        | Operations.CreateInvoice
             -> not noAccountsAtAll
-        | Operations.SendLightningPayment ->
+        | Operations.SendHtlcLightningPayment ->
             activeAccounts.OfType<NormalUtxoAccount>().SelectMany(fun account ->
                 let channelStore = ChannelStore account
                 channelStore.ListChannelInfos()
