@@ -1016,7 +1016,30 @@ module LayerTwo =
             | _ ->
                 return justChannelBeingClosedInfo
         }
-
+    //TODO: add good user-friendly msgs here
+    let HandleReadyToResolveHtlc (accounts: seq<IAccount>) =
+        async {
+            let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
+            for account in normalUtxoAccounts do
+                let channelStore = ChannelStore account
+                let channelIds =
+                    channelStore.ListChannelIds()
+                for channelId in channelIds do
+                    let! htlcTxsList = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId channelStore
+                    let rec tryCreateHtlcTx (htlcTxsList: HtlcTxsList) (password: string) =
+                        async {
+                            if htlcTxsList.IsEmpty() then
+                                return ()
+                            else
+                                let nodeClient = Lightning.Connection.StartClient channelStore password
+                                let! htlcTx, htlcTxsList = (Node.Client nodeClient).CreateHtlcTxForListHead htlcTxsList password
+                                //TODO: ask user's permission with htlc amount + fee ammount
+                                let! _ = UtxoCoin.Account.BroadcastRawTransaction ((account :> IAccount).Currency) (htlcTx.Tx.ToString())
+                                return! tryCreateHtlcTx htlcTxsList password
+                        }
+                    do! tryCreateHtlcTx htlcTxsList |> UserInteraction.TryWithPasswordAsync
+        }
+    
     let GetChannelStatuses (accounts: seq<IAccount>): seq<Async<unit -> Async<seq<string>>>> =
         seq {
             let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()

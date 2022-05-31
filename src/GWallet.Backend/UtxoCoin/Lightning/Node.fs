@@ -906,7 +906,6 @@ type Node =
                 return failwith "Main output can never be inapplicable"
         }
     //FIXME: name
-    //fIXME: local with outside utxos
     member self.CreateHtlcTxForListHead
         (htlcTransactions: HtlcTxsList)
         (password: string)

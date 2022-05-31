@@ -53,7 +53,7 @@ type HtlcTx =
     }
 
 type HtlcTxsList =
-    {
+    internal {
         ChannelId: ChannelIdentifier
         ClosingTx: Transaction
         Currency: Currency
@@ -63,3 +63,5 @@ type HtlcTxsList =
 
     member self.IsEmpty () =
         Seq.isEmpty self.Transactions
+    member self.IsDone () =
+        self.Done

@@ -229,7 +229,7 @@ module public ChainWatcher =
                         CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId channelStore
         }
 
-    let CheckForReadyToBroadcastHtlcTransactions (channelId: ChannelIdentifier)
+    let CheckForChannelReadyToBroadcastHtlcTransactions (channelId: ChannelIdentifier)
                                                  (channelStore: ChannelStore)
                                                      : Async<HtlcTxsList> = async {
         let currency = (channelStore.Account :> IAccount).Currency
@@ -270,6 +270,17 @@ module public ChainWatcher =
                 Done = htlcsData.ChannelHtlcsData.IsEmpty
             }
     }
+
+    let CheckForReadyToBroadcastHtlcTransactions (accounts: seq<UtxoCoin.NormalUtxoAccount>): seq<Async<HtlcTxsList>> =
+        seq {
+            for account in accounts do
+                let channelStore = ChannelStore account
+                let channelIds = channelStore.ListChannelIds()
+
+                for channelId in channelIds do
+                    yield
+                        CheckForChannelReadyToBroadcastHtlcTransactions channelId channelStore
+        }
 
     let CheckForReadyToSpendDelayedHtlcTransactions (channelId: ChannelIdentifier)
                                                     (channelStore: ChannelStore)

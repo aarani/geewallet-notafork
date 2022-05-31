@@ -624,8 +624,8 @@ type LN() =
         let rec waitUntilReadyForBroadcastIsNotEmpty () =
             async {
                 let! _ = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId clientWallet.ChannelStore
-                let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
-                if readyForBroadcast.Done then
+                let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
+                if readyForBroadcast.IsDone () then
                     return readyForBroadcast
                 else if readyForBroadcast.IsEmpty () then
                     Console.WriteLine "No ready for broadcast, rechecking"
@@ -720,8 +720,8 @@ type LN() =
                     let rec waitUntilReadyForBroadcastIsNotEmpty () =
                         async {
                             let! _result = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId serverWallet.ChannelStore
-                            let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
-                            if readyForBroadcast.Done then
+                            let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
+                            if readyForBroadcast.IsDone () then
                                 return readyForBroadcast
                             else if readyForBroadcast.IsEmpty () then
                                 Console.WriteLine "No ready for broadcast, rechecking"
@@ -882,8 +882,8 @@ type LN() =
 
         let rec waitUntilReadyForBroadcastIsNotEmpty () =
             async {
-                let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
-                if readyForBroadcast.Done then
+                let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
+                if readyForBroadcast.IsDone () then
                     return readyForBroadcast
                 else if readyForBroadcast.IsEmpty () then
                     Console.WriteLine "No ready for broadcast, rechecking"
@@ -985,8 +985,8 @@ type LN() =
                 let rec waitUntilReadyForBroadcastIsNotEmpty () =
                     async {
                         let! _result = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId serverWallet.ChannelStore
-                        let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
-                        if readyForBroadcast.Done then
+                        let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
+                        if readyForBroadcast.IsDone () then
                             return readyForBroadcast
                         else if readyForBroadcast.IsEmpty () then
                             Console.WriteLine "No ready for broadcast, rechecking"
@@ -1191,7 +1191,7 @@ type LN() =
 
         let rec waitUntilReadyForBroadcastIsNotEmpty () =
             async {
-                let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
+                let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
                 if readyForBroadcast.IsEmpty () then
                     bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
                     do! Async.Sleep 100
@@ -1343,7 +1343,7 @@ type LN() =
 
             let rec waitUntilReadyForBroadcastIsNotEmpty () =
                 async {
-                    let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
+                    let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
                     if readyForBroadcast.IsEmpty () then
                         bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
                         do! Async.Sleep 100
@@ -1449,7 +1449,7 @@ type LN() =
 
             let rec waitUntilReadyForBroadcastIsNotEmpty () =
                 async {
-                    let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
+                    let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
                     if readyForBroadcast.IsEmpty () then
                         Console.WriteLine "No ready for broadcast, rechecking"
                         bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
@@ -1588,7 +1588,7 @@ type LN() =
 
         let rec waitUntilReadyForBroadcastIsNotEmpty () =
             async {
-                let! readyForBroadcast = ChainWatcher.CheckForReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
+                let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
                 if readyForBroadcast.IsEmpty () then
                     Console.WriteLine "No ready for broadcast, rechecking"
                     bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)

@@ -453,11 +453,15 @@ let rec ProgramMainLoop() =
         Lightning.ChainWatcher.CheckForChannelFraudsAndSendRevocationTx
         <| activeAccounts.OfType<UtxoCoin.NormalUtxoAccount>()
     let revokedTxCheckJob: Async<array<Option<string>>> = Async.Parallel revokedTxCheckJobs
+    let unresolvedHtlcsCheckJobs: seq<Async<bool>> =
+        Lightning.ChainWatcher.CheckForForceCloseAndSaveUnresolvedHtlcs
+        <| activeAccounts.OfType<UtxoCoin.NormalUtxoAccount>()
+    let unresolvedHtlcsCheckJob: Async<array<bool>> = Async.Parallel unresolvedHtlcsCheckJobs
     let channelInfoInteractionsJob: Async<array<unit -> Async<seq<string>>>> = Async.Parallel channelStatusJobs
     let displayAccountStatusesJob =
         UserInteraction.DisplayAccountStatuses(WhichAccount.All activeAccounts)
-    let channelInfoInteractions, accountStatusesLines, _ =
-        AsyncExtensions.MixedParallel3 channelInfoInteractionsJob displayAccountStatusesJob revokedTxCheckJob
+    let channelInfoInteractions, accountStatusesLines, _, _ =
+        AsyncExtensions.MixedParallel4 channelInfoInteractionsJob displayAccountStatusesJob revokedTxCheckJob unresolvedHtlcsCheckJob
         |> Async.RunSynchronously
 
     Console.WriteLine ()
@@ -465,6 +469,9 @@ let rec ProgramMainLoop() =
     Console.WriteLine(String.concat Environment.NewLine accountStatusesLines)
 
     Console.WriteLine()
+
+    LayerTwo.HandleReadyToResolveHtlc activeAccounts
+    |> Async.RunSynchronously
 
     let rec runChannelInteractions (statusLines: seq<string>) (channelInfoInteractions: seq<unit -> Async<seq<string>>>) =
         match Seq.tryHead channelInfoInteractions with
