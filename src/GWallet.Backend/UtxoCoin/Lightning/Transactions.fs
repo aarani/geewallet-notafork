@@ -50,7 +50,12 @@ type HtlcTx =
         Currency: Currency
         Tx: UtxoTransaction
         Fee: MinerFee
+        AmountInSatoshis: int64
     }
+
+    /// Returns true if htlc amount is less than or equal to the fees needed to spend it
+    member self.IsDust () =
+        self.AmountInSatoshis <= self.Fee.EstimatedFeeInSatoshis
 
 type HtlcTxsList =
     internal {

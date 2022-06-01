@@ -178,15 +178,15 @@ module public ChainWatcher =
                                             return unspentHtlcList
                                         | head::tail ->
                                             match head with
-                                            | HtlcTransaction.Timeout (_, spk, _)
-                                            | HtlcTransaction.Success (_, spk, _) ->
+                                            | HtlcTransaction.Timeout (_, spk, _, _)
+                                            | HtlcTransaction.Success (_, spk, _, _) ->
                                                 let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetUnspentTransactionOutputs
                                                 let! utxos = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
                                                 if utxos |> Seq.isEmpty then
                                                     return! removeSpentOutputs tail unspentHtlcList
                                                 else
                                                     return! removeSpentOutputs tail (head :: unspentHtlcList)
-                                            | HtlcTransaction.Penalty _redeemScript ->
+                                            | HtlcTransaction.Penalty (_redeemScript, _) ->
                                                 return! removeSpentOutputs tail (head :: unspentHtlcList)
                                     }
 
@@ -253,7 +253,7 @@ module public ChainWatcher =
             htlcsData.ChannelHtlcsData
             |> List.choose (fun htlc ->
                 match htlc with
-                | HtlcTransaction.Timeout (_, _, cltvExpiry) when blockHeight > cltvExpiry ->
+                | HtlcTransaction.Timeout (_, _, cltvExpiry, _) when blockHeight > cltvExpiry ->
                     Some htlc
                 | HtlcTransaction.Penalty _
                 | HtlcTransaction.Success _ ->

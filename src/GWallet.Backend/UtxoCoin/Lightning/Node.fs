@@ -958,7 +958,7 @@ type Node =
                     | Timeout _
                     | HtlcTransaction.Success _ ->
                         claimHtlcOutput transaction
-                    | Penalty redeemScript ->
+                    | Penalty (redeemScript, _) ->
                         async {
                             let GetElectrumScriptHashFromScriptPubKey (scriptPubKey: Script) =
                                 let sha = NBitcoin.Crypto.Hashes.SHA256(scriptPubKey.ToBytes())
@@ -1017,6 +1017,7 @@ type Node =
                         ChannelId = htlcTransactions.ChannelId
                         Currency = currency
                         Fee = MinerFee (fees.Satoshi, DateTime.UtcNow, currency)
+                        AmountInSatoshis = transaction.Amount.Satoshi
                         Tx =
                             {
                                 NBitcoinTx = finalTx
