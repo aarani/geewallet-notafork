@@ -421,12 +421,13 @@ module ChannelManager =
                 UtxoCoin.Account.BroadcastRawTransaction
                     htlcTx.Currency
                     (htlcTx.Tx.ToString())
-            let channelAfterRecovery =
-                { channelPreRecovery with
-                    HtlcDelayedTxs =
-                        htlcTx.Tx.Id :: channelPreRecovery.HtlcDelayedTxs
-                }
-            channelStore.SaveChannel channelAfterRecovery
+            if htlcTx.NeedsRecoveryTx then
+                let channelAfterRecovery =
+                    { channelPreRecovery with
+                        HtlcDelayedTxs =
+                            htlcTx.Tx.Id :: channelPreRecovery.HtlcDelayedTxs
+                    }
+                channelStore.SaveChannel channelAfterRecovery
             return txId
         }
 

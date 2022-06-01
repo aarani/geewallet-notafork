@@ -49,13 +49,20 @@ type HtlcTx =
         ChannelId: ChannelIdentifier
         Currency: Currency
         Tx: UtxoTransaction
+        NeedsRecoveryTx: bool
         Fee: MinerFee
         AmountInSatoshis: int64
     }
 
     /// Returns true if htlc amount is less than or equal to the fees needed to spend it
     member self.IsDust () =
-        self.AmountInSatoshis <= self.Fee.EstimatedFeeInSatoshis
+        if not self.NeedsRecoveryTx then
+            self.AmountInSatoshis <= self.Fee.EstimatedFeeInSatoshis
+        else
+            let previousSize = self.Tx.NBitcoinTx.GetVirtualSize() |> double
+            //FIXME: hardcoded value
+            let newSize = previousSize + 273.
+            self.AmountInSatoshis <= ((((self.Fee.EstimatedFeeInSatoshis |> double) / previousSize) * newSize) |> System.Convert.ToInt64)
 
 type HtlcTxsList =
     internal {

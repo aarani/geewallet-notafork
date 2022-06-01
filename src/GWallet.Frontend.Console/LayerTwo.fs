@@ -1022,7 +1022,6 @@ module LayerTwo =
             let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
             for account in normalUtxoAccounts do
                 let channelStore = ChannelStore account
-                let currency = (account :> IAccount).Currency
                 let channelIds =
                     channelStore.ListChannelIds()
                 for channelId in channelIds do
@@ -1038,7 +1037,7 @@ module LayerTwo =
                                     return! tryCreateHtlcTx htlcTxsList password
                                 else
                                     //TODO: ask user's permission with htlc amount + fee ammount
-                                    do! UtxoCoin.Account.BroadcastRawTransaction currency (htlcTx.Tx.ToString()) |> Async.Ignore
+                                    do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx channelStore |> Async.Ignore
                                     return! tryCreateHtlcTx htlcTxsList password
                         }
                     do! tryCreateHtlcTx htlcTxsList |> UserInteraction.TryWithPasswordAsync

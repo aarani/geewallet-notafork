@@ -944,16 +944,17 @@ type Node =
                         }
                         let fees = txb.EstimateFees (feeRate.AsNBitcoinFeeRate())
                         txb.SendFees fees |> ignore<TransactionBuilder>
-                        return (txb.BuildTransaction true, fees)
+                        return (txb.BuildTransaction true, fees, shouldAddFee)
                     else
                         //TODO: We need to somehow make sure we are not paying more fees than the htlc itself
-                        return! FeeManagement.addFeeInputsWithCpfpSupport (self.ChannelStore.Account, password) txb None
+                        let! tx, fees = FeeManagement.addFeeInputsWithCpfpSupport (self.ChannelStore.Account, password) txb None
+                        return tx, fees, shouldAddFee
                 }
 
             match htlcTransactions.Transactions with
             | [] -> return failwith "This function shouldn't be called if htlcTransaction.IsDone is true"
             | transaction:: rest ->
-                let! finalTx, fees =
+                let! finalTx, fees, shouldAddFees =
                     match transaction with
                     | Timeout _
                     | HtlcTransaction.Success _ ->
@@ -1005,7 +1006,7 @@ type Node =
                                         }
                                         let fees = txb.EstimateFees (feeRate.AsNBitcoinFeeRate())
                                         txb.SendFees fees |> ignore<TransactionBuilder>
-                                        return (txb.BuildTransaction true, fees)
+                                        return (txb.BuildTransaction true, fees, false)
                                     | None ->
                                         return failwith "NIE"
                             else
@@ -1018,6 +1019,7 @@ type Node =
                         Currency = currency
                         Fee = MinerFee (fees.Satoshi, DateTime.UtcNow, currency)
                         AmountInSatoshis = transaction.Amount.Satoshi
+                        NeedsRecoveryTx = shouldAddFees
                         Tx =
                             {
                                 NBitcoinTx = finalTx
