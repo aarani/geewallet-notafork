@@ -1018,7 +1018,7 @@ type Node =
                         ChannelId = htlcTransactions.ChannelId
                         Currency = currency
                         Fee = MinerFee (fees.Satoshi, DateTime.UtcNow, currency)
-                        AmountInSatoshis = transaction.Amount.Satoshi
+                        AmountInSatoshis = transaction.Amount.Satoshi |> Convert.ToUInt64
                         NeedsRecoveryTx = shouldAddFees
                         Tx =
                             {
@@ -1030,8 +1030,8 @@ type Node =
 
     member self.CreateRecoveryTxForDelayedHtlcTx
         (channelId: ChannelIdentifier)
-        (readyToSpendTransactionIds: List<TransactionIdentifier>)
-        : Async<List<RecoveryTx>> =
+        (readyToSpendTransactionIdsWithAmount: List<AmountInSatoshis * TransactionIdentifier>)
+        : Async<List<HtlcRecoveryTx>> =
         async {
             let nodeMasterPrivKey =
                 match self with
@@ -1050,11 +1050,11 @@ type Node =
                 let! feeEstimator = FeeEstimator.Create currency
                 return feeEstimator.FeeRatePerKw
             }
-            let rec createRecoveryTx (txIds: List<TransactionIdentifier>) (state) =
+            let rec createRecoveryTx (txIdsWithAmount: List<AmountInSatoshis * TransactionIdentifier>) (state) =
                 async {
-                    match txIds with
+                    match txIdsWithAmount with
                     | [] -> return state
-                    | transactionId:: rest ->
+                    | (amount, transactionId):: rest ->
                         let! htlcDelayedTx =
                             async {
                                 let! htlcDelayedTxStr =
@@ -1093,21 +1093,23 @@ type Node =
 
                             let finalTx = txb.BuildTransaction true
 
-                            let htlcTransaction: RecoveryTx =
+                            let recoveryTx: HtlcRecoveryTx =
                                 {
                                     ChannelId = channelId
                                     Currency = currency
                                     Fee = MinerFee (fees.Satoshi, DateTime.UtcNow, currency)
+                                    HtlcTxId = transactionId
                                     Tx =
                                         {
                                             NBitcoinTx = finalTx
                                         }
+                                    AmountInSatoshis = amount
                                 }
-                            return! createRecoveryTx rest (htlcTransaction::state)
+                            return! createRecoveryTx rest (recoveryTx::state)
                         | None -> return failwith "NIE"                
                 }
 
-            return! createRecoveryTx readyToSpendTransactionIds List.empty
+            return! createRecoveryTx readyToSpendTransactionIdsWithAmount List.empty
         }
 
     member self.UpdateFee (channelId: ChannelIdentifier)

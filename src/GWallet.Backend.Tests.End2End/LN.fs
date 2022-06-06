@@ -1494,16 +1494,16 @@ type LN() =
 
             let! readyToSpend2ndStages = checkForReadyToSpend2ndStageClaim()
 
-            let rec spend2ndStages (readyToSpend2ndStages: List<TransactionIdentifier>)  =
+            let rec spend2ndStages (readyToSpend2ndStages: List<AmountInSatoshis * TransactionIdentifier>)  =
                 async {
                     let! recoveryTxs = (Lightning.Node.Server serverWallet.NodeServer).CreateRecoveryTxForDelayedHtlcTx channelId readyToSpend2ndStages
                     Console.WriteLine (sprintf "Broadcasting... %A" recoveryTxs)
-                    let rec broadcastSpendingTxs (recoveryTxs: List<RecoveryTx>) (feeSum: Money) =
+                    let rec broadcastSpendingTxs (recoveryTxs: List<HtlcRecoveryTx>) (feeSum: Money) =
                         async {
                             match recoveryTxs with
                             | [] -> return feeSum
                             | recoveryTx::rest ->
-                                do! UtxoCoin.Account.BroadcastRawTransaction recoveryTx.Currency (recoveryTx.Tx.ToString()) |> Async.Ignore
+                                do! ChannelManager.BroadcastHtlcRecoveryTxAndRemoveFromWatchList recoveryTx serverWallet.ChannelStore |> Async.Ignore
                                 bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
                                 return! broadcastSpendingTxs rest (feeSum + (Money.Satoshis recoveryTx.Fee.EstimatedFeeInSatoshis))
@@ -1633,16 +1633,16 @@ type LN() =
 
         let! readyToSpend2ndStages = checkForReadyToSpend2ndStageClaim()
 
-        let rec spend2ndStages (readyToSpend2ndStages: List<TransactionIdentifier>)  =
+        let rec spend2ndStages (readyToSpend2ndStages: List<AmountInSatoshis * TransactionIdentifier>)  =
             async {
                 let! recoveryTxs = (Lightning.Node.Client clientWallet.NodeClient).CreateRecoveryTxForDelayedHtlcTx channelId readyToSpend2ndStages
                 Console.WriteLine (sprintf "Broadcasting... %A" recoveryTxs)
-                let rec broadcastSpendingTxs (recoveryTxs: List<RecoveryTx>) (feeSum: Money) =
+                let rec broadcastSpendingTxs (recoveryTxs: List<HtlcRecoveryTx>) (feeSum: Money) =
                     async {
                         match recoveryTxs with
                         | [] -> return feeSum
                         | recoveryTx::rest ->
-                            do! UtxoCoin.Account.BroadcastRawTransaction recoveryTx.Currency (recoveryTx.Tx.ToString()) |> Async.Ignore
+                            do! ChannelManager.BroadcastHtlcRecoveryTxAndRemoveFromWatchList recoveryTx clientWallet.ChannelStore |> Async.Ignore
                             bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
                             return! broadcastSpendingTxs rest (feeSum + (Money.Satoshis recoveryTx.Fee.EstimatedFeeInSatoshis))

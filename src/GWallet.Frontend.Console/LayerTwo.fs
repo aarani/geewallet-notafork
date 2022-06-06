@@ -1042,6 +1042,37 @@ module LayerTwo =
                         }
                     do! tryCreateHtlcTx htlcTxsList |> UserInteraction.TryWithPasswordAsync
         }
+
+    //TODO: add good user-friendly msgs here
+    let HandleReadyToRecoverDelayedHtlcs (accounts: seq<IAccount>) =
+        async {
+            let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
+            for account in normalUtxoAccounts do
+                let channelStore = ChannelStore account
+                let channelIds =
+                    channelStore.ListChannelIds()
+                for channelId in channelIds do
+                    let! delayedHtlcsTxsList = ChainWatcher.CheckForReadyToSpendDelayedHtlcTransactions channelId channelStore
+                    let tryCreateRecoveryTx (delayedHtlcsTxsList: List<AmountInSatoshis * TransactionIdentifier>) (password: string) =
+                        async {
+                            if delayedHtlcsTxsList |> List.isEmpty then
+                                return ()
+                            else
+                                let nodeClient = Lightning.Connection.StartClient channelStore password
+                                let! htlcRecoveryTxs = (Node.Client nodeClient).CreateRecoveryTxForDelayedHtlcTx channelId delayedHtlcsTxsList
+                                let rec broadcastRecoveryTxs (htlcRecoveryTxs) =
+                                    async {
+                                        match htlcRecoveryTxs with
+                                        | [] ->
+                                            return ()
+                                        | recoveryTx::rest ->
+                                            do! ChannelManager.BroadcastHtlcRecoveryTxAndRemoveFromWatchList recoveryTx channelStore |> Async.Ignore
+                                            return! broadcastRecoveryTxs rest
+                                    }
+                                return! broadcastRecoveryTxs htlcRecoveryTxs
+                        }
+                    do! tryCreateRecoveryTx delayedHtlcsTxsList |> UserInteraction.TryWithPasswordAsync
+        }
     
     let GetChannelStatuses (accounts: seq<IAccount>): seq<Async<unit -> Async<seq<string>>>> =
         seq {
@@ -1124,8 +1155,12 @@ module LayerTwo =
                         }
                     | ChannelStatus.RecoveryTxSent recoveryTxId -> 
                         yield async {
+                            let noInProgressHtlcRecovery =
+                                (ChannelManager.ListAllHtlcs channelStore channelId)
+                                    .WaitingForConfirmationToRecover
+                                    .IsEmpty
                             let! isRecoveryTxConfirmed = ChannelManager.CheckForConfirmedRecovery channelStore channelId recoveryTxId
-                            if isRecoveryTxConfirmed then
+                            if isRecoveryTxConfirmed && noInProgressHtlcRecovery then
                                 return
                                     fun () ->
                                         async {
