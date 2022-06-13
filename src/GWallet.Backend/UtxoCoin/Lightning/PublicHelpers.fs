@@ -38,6 +38,7 @@ module public Network =
     let public CheckClosingFinished = ClosedChannel.CheckClosingFinished
 
     let public SendHtlcPayment (nodeClient: NodeClient) = nodeClient.SendHtlcPayment
+    let public TryToSettle (nodeClient: NodeClient) = nodeClient.TryToSettle
     let public SendMonoHopPayment (nodeClient: NodeClient) = nodeClient.SendMonoHopPayment
     let public ConnectLockChannelFunding (nodeClient: NodeClient) = nodeClient.ConnectLockChannelFunding
 

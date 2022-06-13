@@ -365,6 +365,45 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
 
     }
 
+    //TODO: add timeout for receiving settle msg
+    member internal self.TryToSettle (channelId: ChannelIdentifier)
+                                             : Async<Result<bool, IErrorMsg>> = async {
+        let! activeChannelRes =
+            ActiveChannel.ConnectReestablish self.ChannelStore nodeMasterPrivKey channelId None
+        match activeChannelRes with
+        | Error reconnectActiveChannelError ->
+            if reconnectActiveChannelError.PossibleBug then
+                let msg =
+                    SPrintF2
+                        "error connecting to peer to send hltc payment on channel %s: %s"
+                        (channelId.ToString())
+                        (reconnectActiveChannelError :> IErrorMsg).Message
+                Infrastructure.ReportWarningMessage msg
+                |> ignore<bool>
+            return Error <| (NodeSendHtlcPaymentError.Reconnect reconnectActiveChannelError :> IErrorMsg)
+        | Ok activeChannel ->
+            let rec receiveEvent (activeChannel: ActiveChannel) = async {
+                let connectedChannel = activeChannel.ConnectedChannel
+                try
+                    let! recvChannelMsgRes = AsyncExtensions.WithTimeout (TimeSpan.FromMinutes 2) (connectedChannel.PeerNode.RecvChannelMsg())
+                    match recvChannelMsgRes with
+                    | Ok (peerNodeAfterMsgReceived, channelMsg) ->
+                        let! handleHtlcSettleRes = activeChannel.HandleHtlcFulfillOrFail peerNodeAfterMsgReceived channelMsg
+                        match handleHtlcSettleRes with
+                        | Ok (_newActiveChannel, wasSettleOk) ->
+                            return Ok wasSettleOk
+                        | _ ->
+                            return failwith "NIE"
+                    | Error _ ->
+                        return failwith "NIE"
+                with
+                | :? TimeoutException ->
+                    return Ok false
+            }
+
+            return! receiveEvent activeChannel
+    }
+
     member internal self.SendMonoHopPayment (channelId: ChannelIdentifier)
                                             (transferAmount: TransferAmount)
                                             (nonionEndPoint: Option<NOnionEndPoint>)

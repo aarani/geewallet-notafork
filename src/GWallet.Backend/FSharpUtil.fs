@@ -214,6 +214,33 @@ module FSharpUtil =
                 return allJobsStarted
             }
 
+        let WithTimeout (timeSpan: TimeSpan) (job: Async<'R>) : Async<'R> =
+            async {
+                let read =
+                    async {
+                        let! value = job
+                        return value |> SuccessfulValue |> Some
+                    }
+
+                let delay =
+                    async {
+                        let total = int timeSpan.TotalMilliseconds
+                        do! Async.Sleep total
+                        return FailureResult <| TimeoutException() |> Some
+                    }
+
+                let! dummyOption = Async.Choice([ read; delay ])
+
+                match dummyOption with
+                | Some theResult ->
+                    match theResult with
+                    | SuccessfulValue r -> return r
+                    | FailureResult _ -> return raise <| TimeoutException()
+                | None ->
+                    // none of the jobs passed to Async.Choice returns None
+                    return failwith "unreachable"
+            }
+
     let rec private ListIntersectInternal list1 list2 offset acc currentIndex =
         match list1,list2 with
         | [],[] -> List.rev acc

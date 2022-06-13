@@ -738,6 +738,14 @@ and internal ActiveChannel =
             let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
             return Error <| PeerErrorMessageInsteadOfHtlcFulfill (brokenChannel, errorMessage)
         | Ok (peerNodeAfterHtlcResultReceived, channelMsg) ->
+            return! self.HandleHtlcFulfillOrFail peerNodeAfterHtlcResultReceived channelMsg
+    }
+
+    member internal self.HandleHtlcFulfillOrFail (nextPeerNode: PeerNode) (channelMsg: IChannelMsg) =
+        async {
+            let connectedChannel = self.ConnectedChannel
+            let channel = connectedChannel.Channel
+
             match channelMsg with
             | :? UpdateFulfillHTLCMsg as theirFulfillMsg ->
                 let channelAfterFulfillMsgRes =
@@ -746,7 +754,7 @@ and internal ActiveChannel =
                 | Error err ->
                     let connectedChannelAfterError = {
                         connectedChannel with
-                            PeerNode = peerNodeAfterHtlcResultReceived
+                            PeerNode = nextPeerNode
                             Channel = channel
                     }
                     let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
@@ -754,7 +762,7 @@ and internal ActiveChannel =
                 | Ok channelAfterFulfillMsg ->
                     let connectedChannelAfterFulfillMsg = {
                         connectedChannel with
-                            PeerNode = peerNodeAfterHtlcResultReceived
+                            PeerNode = nextPeerNode
                             Channel = 
                                 {
                                     Channel = channelAfterFulfillMsg
@@ -778,7 +786,7 @@ and internal ActiveChannel =
                 | Error err ->
                     let connectedChannelAfterError = {
                         connectedChannel with
-                            PeerNode = peerNodeAfterHtlcResultReceived
+                            PeerNode = nextPeerNode
                             Channel = channel
                     }
                     let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
@@ -786,7 +794,7 @@ and internal ActiveChannel =
                 | Ok channelAfterFailMsg ->
                     let connectedChannelAfterFailMsg = {
                         connectedChannel with
-                            PeerNode = peerNodeAfterHtlcResultReceived
+                            PeerNode = nextPeerNode
                             Channel = 
                                 {
                                     Channel = channelAfterFailMsg
@@ -809,7 +817,7 @@ and internal ActiveChannel =
                 | Error err ->
                     let connectedChannelAfterError = {
                         connectedChannel with
-                            PeerNode = peerNodeAfterHtlcResultReceived
+                            PeerNode = nextPeerNode
                             Channel = channel
                     }
                     let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
@@ -817,7 +825,7 @@ and internal ActiveChannel =
                 | Ok channelAfterFailMsg ->
                     let connectedChannelAfterFailMsg = {
                         connectedChannel with
-                            PeerNode = peerNodeAfterHtlcResultReceived
+                            PeerNode = nextPeerNode
                             Channel = 
                                 {
                                     Channel = channelAfterFailMsg
@@ -834,7 +842,7 @@ and internal ActiveChannel =
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
                         | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, false)
             | _ -> return Error <| ExpectedHtlcFulfillOrFail channelMsg
-    }
+        }
 
     member internal self.SendMonoHopUnidirectionalPayment (amount: LNMoney)
                                                      : Async<Result<ActiveChannel, SendMonoHopPaymentError>> = async {

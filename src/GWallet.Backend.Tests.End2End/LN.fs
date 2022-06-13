@@ -1130,6 +1130,42 @@ type LN() =
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
+    [<Category "HtlcLateSettle">]
+    [<Test>]
+    member __.``can open channel with LND and send htlc but settle after reconnect``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = OpenChannelWithFundee None
+
+        let channelInfo = clientWallet.ChannelStore.ChannelInfo channelId
+        match channelInfo.Status with
+        | ChannelStatus.Active -> ()
+        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+
+        let! _sendHtlcPayment1Res =
+            async {
+                let transferAmount =
+                    let accountBalance = Money(channelInfo.SpendableBalance, MoneyUnit.BTC)
+                    TransferAmount (walletToWalletTestPayment1Amount.ToDecimal MoneyUnit.BTC, accountBalance.ToDecimal MoneyUnit.BTC, Currency.BTC)
+                let! invoiceOpt =
+                    lnd.CreateInvoice transferAmount (TimeSpan.FromSeconds 1. |> Some)
+                let invoice = UnwrapOption invoiceOpt "Failed to create first invoice"
+
+                do! Async.Sleep 2000
+
+                return!
+                    Lightning.Network.SendHtlcPayment
+                        clientWallet.NodeClient
+                        channelId
+                        (PaymentInvoice.Parse invoice.BOLT11)
+                        false
+            }
+
+        let! _settleRes = Lightning.Network.TryToSettle
+                            clientWallet.NodeClient
+                            channelId
+        
+        TearDown clientWallet bitcoind electrumServer lnd
+    }
+
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
     member __.``can open channel with LND and send invalid htlc but settle on-chain (force close initiated by lnd)``() = Async.RunSynchronously <| async {
