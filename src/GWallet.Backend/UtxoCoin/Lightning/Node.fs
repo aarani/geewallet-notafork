@@ -365,7 +365,6 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
 
     }
 
-    //TODO: add timeout for receiving settle msg
     member internal self.TryToSettle (channelId: ChannelIdentifier)
                                              : Async<Result<bool, IErrorMsg>> = async {
         let! activeChannelRes =
@@ -388,12 +387,26 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     let! recvChannelMsgRes = AsyncExtensions.WithTimeout (TimeSpan.FromMinutes 2) (connectedChannel.PeerNode.RecvChannelMsg())
                     match recvChannelMsgRes with
                     | Ok (peerNodeAfterMsgReceived, channelMsg) ->
-                        let! handleHtlcSettleRes = activeChannel.HandleHtlcFulfillOrFail peerNodeAfterMsgReceived channelMsg
-                        match handleHtlcSettleRes with
-                        | Ok (_newActiveChannel, wasSettleOk) ->
-                            return Ok wasSettleOk
+                        match channelMsg with
+                        | :? UpdateFulfillHTLCMsg
+                        | :? UpdateFailHTLCMsg
+                        | :? UpdateFailMalformedHTLCMsg ->
+                            let! handleHtlcSettleRes = activeChannel.HandleHtlcFulfillOrFail peerNodeAfterMsgReceived channelMsg
+                            match handleHtlcSettleRes with
+                            | Ok (_newActiveChannel, wasSettleOk) ->
+                                return Ok wasSettleOk
+                            | _ ->
+                                return failwith "NIE"
                         | _ ->
-                            return failwith "NIE"
+                            let connectedChannelAfterMsgReceived = {
+                                connectedChannel with
+                                    PeerNode = peerNodeAfterMsgReceived
+                            }
+                            let activeChannelAfterMsgReceived = {
+                                activeChannel with
+                                    ConnectedChannel = connectedChannelAfterMsgReceived
+                            }
+                            return! receiveEvent activeChannelAfterMsgReceived
                     | Error _ ->
                         return failwith "NIE"
                 with
