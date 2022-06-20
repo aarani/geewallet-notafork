@@ -738,10 +738,10 @@ and internal ActiveChannel =
             let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
             return Error <| PeerErrorMessageInsteadOfHtlcFulfill (brokenChannel, errorMessage)
         | Ok (peerNodeAfterHtlcResultReceived, channelMsg) ->
-            return! self.HandleHtlcFulfillOrFail peerNodeAfterHtlcResultReceived channelMsg
+            return! self.HandleHtlcFulfillOrFail peerNodeAfterHtlcResultReceived channelMsg true
     }
 
-    member internal self.HandleHtlcFulfillOrFail (nextPeerNode: PeerNode) (channelMsg: IChannelMsg) =
+    member internal self.HandleHtlcFulfillOrFail (nextPeerNode: PeerNode) (channelMsg: IChannelMsg) (commit: bool) =
         async {
             let connectedChannel = self.ConnectedChannel
             let channel = connectedChannel.Channel
@@ -771,14 +771,17 @@ and internal ActiveChannel =
                     connectedChannelAfterFulfillMsg.SaveToWallet()
 
                     let activeChannel = { ConnectedChannel = connectedChannelAfterFulfillMsg }
-                    let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
-                    match activeChannelAfterCommitReceivedRes with
-                    | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
-                    | Ok activeChannelAfterCommitReceived ->
-                        let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
-                        match activeChannelAfterCommitSentRes with
-                        | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
-                        | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, true)
+                    if commit then
+                        let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
+                        match activeChannelAfterCommitReceivedRes with
+                        | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
+                        | Ok activeChannelAfterCommitReceived ->
+                            let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
+                            match activeChannelAfterCommitSentRes with
+                            | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
+                            | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, true)
+                    else
+                        return Ok (activeChannel, true)
             | :? UpdateFailHTLCMsg as theirFailMsg ->
                 let channelAfterFailMsgRes =
                     channel.Channel.ApplyUpdateFailHTLC theirFailMsg
@@ -802,14 +805,17 @@ and internal ActiveChannel =
                     }
                     connectedChannelAfterFailMsg.SaveToWallet()
                     let activeChannel = { ConnectedChannel = connectedChannelAfterFailMsg }
-                    let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
-                    match activeChannelAfterCommitReceivedRes with
-                    | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
-                    | Ok activeChannelAfterCommitReceived ->
-                        let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
-                        match activeChannelAfterCommitSentRes with
-                        | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
-                        | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, false)
+                    if commit then
+                        let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
+                        match activeChannelAfterCommitReceivedRes with
+                        | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
+                        | Ok activeChannelAfterCommitReceived ->
+                            let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
+                            match activeChannelAfterCommitSentRes with
+                            | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
+                            | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, false)
+                    else
+                        return Ok (activeChannel, false)
             | :? UpdateFailMalformedHTLCMsg as theirFailMsg ->
                 let channelAfterFailMsgRes =
                     channel.Channel.ApplyUpdateFailMalformedHTLC theirFailMsg
@@ -833,14 +839,17 @@ and internal ActiveChannel =
                     }
                     connectedChannelAfterFailMsg.SaveToWallet()
                     let activeChannel = { ConnectedChannel = connectedChannelAfterFailMsg }
-                    let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
-                    match activeChannelAfterCommitReceivedRes with
-                    | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
-                    | Ok activeChannelAfterCommitReceived ->
-                        let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
-                        match activeChannelAfterCommitSentRes with
-                        | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
-                        | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, false)
+                    if commit then
+                        let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
+                        match activeChannelAfterCommitReceivedRes with
+                        | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
+                        | Ok activeChannelAfterCommitReceived ->
+                            let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
+                            match activeChannelAfterCommitSentRes with
+                            | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
+                            | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, false)
+                    else
+                        return Ok (activeChannel, false)
             | _ -> return Error <| ExpectedHtlcFulfillOrFail channelMsg
         }
 

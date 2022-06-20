@@ -1146,7 +1146,7 @@ type LN() =
                     let accountBalance = Money(channelInfo.SpendableBalance, MoneyUnit.BTC)
                     TransferAmount (walletToWalletTestPayment1Amount.ToDecimal MoneyUnit.BTC, accountBalance.ToDecimal MoneyUnit.BTC, Currency.BTC)
                 let! invoiceOpt =
-                    lnd.CreateInvoice transferAmount (TimeSpan.FromSeconds 1. |> Some)
+                    lnd.CreateInvoice transferAmount (TimeSpan.FromDays 1. |> Some)
                 let invoice = UnwrapOption invoiceOpt "Failed to create first invoice"
 
                 do! Async.Sleep 2000
@@ -1159,10 +1159,33 @@ type LN() =
                         false
             }
 
+        let! _sendHtlcPayment2Res =
+            async {
+                let transferAmount =
+                    let accountBalance = Money(channelInfo.SpendableBalance, MoneyUnit.BTC)
+                    TransferAmount (walletToWalletTestPayment1Amount.ToDecimal MoneyUnit.BTC, accountBalance.ToDecimal MoneyUnit.BTC, Currency.BTC)
+                let! invoiceOpt =
+                    lnd.CreateInvoice transferAmount (TimeSpan.FromDays 1. |> Some)
+                let invoice = UnwrapOption invoiceOpt "Failed to create second invoice"
+
+                do! Async.Sleep 2000
+
+                return!
+                    Lightning.Network.SendHtlcPayment
+                        clientWallet.NodeClient
+                        channelId
+                        (PaymentInvoice.Parse invoice.BOLT11)
+                        false
+            }
+
+        Assert.Throws(fun _ -> ClientCloseChannel clientWallet bitcoind channelId |> Async.RunSynchronously) |> ignore
+
         let! _settleRes = Lightning.Network.TryToSettle
                             clientWallet.NodeClient
                             channelId
-        
+
+        do! ClientCloseChannel clientWallet bitcoind channelId
+
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
