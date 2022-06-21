@@ -367,7 +367,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
     }
 
     member internal self.TryToSettle (channelId: ChannelIdentifier)
-                                             : Async<Result<bool, IErrorMsg>> = async {
+                                             : Async<Result<unit, IErrorMsg>> = async {
         let! activeChannelRes =
             ActiveChannel.ConnectReestablish self.ChannelStore nodeMasterPrivKey channelId None
         match activeChannelRes with
@@ -381,123 +381,8 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 Infrastructure.ReportWarningMessage msg
                 |> ignore<bool>
             return Error <| (NodeSendHtlcPaymentError.Reconnect reconnectActiveChannelError :> IErrorMsg)
-        | Ok activeChannel ->
-            let rec receiveEvent (activeChannel: ActiveChannel): Async<bool> = async {
-                let connectedChannel = activeChannel.ConnectedChannel
-                try
-                    let! recvChannelMsgRes = AsyncExtensions.WithTimeout (TimeSpan.FromMinutes 2) (connectedChannel.PeerNode.RecvChannelMsg())
-                    match recvChannelMsgRes with
-                    | Ok (peerNodeAfterMsgReceived, channelMsg) ->
-                        match channelMsg with
-                        | :? UpdateAddHTLCMsg ->
-                            return failwith "Uni-directional only!"
-                        | :? UpdateFulfillHTLCMsg
-                        | :? UpdateFailHTLCMsg
-                        | :? UpdateFailMalformedHTLCMsg ->
-                            let! handleHtlcSettleRes = activeChannel.HandleHtlcFulfillOrFail peerNodeAfterMsgReceived channelMsg false
-                            match handleHtlcSettleRes with
-                            | Ok (newActiveChannel, _wasSettleOk) ->
-                                return! receiveEvent newActiveChannel
-                            | _ ->
-                                return failwith "NIE"
-                        | :? CommitmentSignedMsg as theirCommitmentSignedMsg ->
-                            let ourRevokeAndAckMsgAndChannelRes =
-                                connectedChannel.Channel.Channel.ApplyCommitmentSigned theirCommitmentSignedMsg
-                            match ourRevokeAndAckMsgAndChannelRes with
-                            | Error err ->
-                                return failwith "NIE"
-                            | Ok (channelAfterCommitmentSignedApply, ourRevokeAndAckMsg) ->
-                                let! peerNodeAfterRevokeAndAckSent = peerNodeAfterMsgReceived.SendMsg ourRevokeAndAckMsg
-
-                                let connectedChannelAfterRevokeAndAck =
-                                    {
-                                        connectedChannel with
-                                            PeerNode = peerNodeAfterRevokeAndAckSent
-                                            Channel =
-                                                {
-                                                    Channel = channelAfterCommitmentSignedApply
-                                                }
-                                    }
-                                connectedChannelAfterRevokeAndAck.SaveToWallet()
-                                let ourCommitmentSignedMsgAndChannelRes = connectedChannelAfterRevokeAndAck.Channel.Channel.SignCommitment ()
-                                let channelAfterCommitmentSigned, ourCommitmentSignedMsg = UnwrapResult ourCommitmentSignedMsgAndChannelRes "error executing sign commit command"
-                                let! peerNodeAfterCommitmentSignedSent = peerNodeAfterRevokeAndAckSent.SendMsg ourCommitmentSignedMsg
-                                let connectedChannelAfterCommitmentSignedSent =
-                                    {
-                                        connectedChannel with
-                                            PeerNode = peerNodeAfterCommitmentSignedSent
-                                            Channel =
-                                                {
-                                                    Channel = channelAfterCommitmentSigned
-                                                }
-                                    }
-                                connectedChannelAfterCommitmentSignedSent.SaveToWallet()
-                                let activeChannel = { ConnectedChannel = connectedChannelAfterCommitmentSignedSent }
-                                return! receiveEvent activeChannel
-                        | :? RevokeAndACKMsg as theirRevokeAndAckMsg ->
-                            let channelAferRevokeAndAckRes =
-                                activeChannel.ConnectedChannel.Channel.Channel.ApplyRevokeAndACK theirRevokeAndAckMsg
-
-                            match channelAferRevokeAndAckRes with
-                            | Error err ->
-                                return failwith "NIE"
-                            | Ok channelAferRevokeAndAck ->
-                                let connectedChannelAfterRevokeAndAck =
-                                    {
-                                        connectedChannel with
-                                            PeerNode = peerNodeAfterMsgReceived
-                                            Channel =
-                                                {
-                                                    Channel = channelAferRevokeAndAck
-                                                }
-                                    }
-                                connectedChannelAfterRevokeAndAck.SaveToWallet()
-
-                                let channelPrivKeys = connectedChannelAfterRevokeAndAck.Channel.ChannelPrivKeys
-                                let savedChannelState = connectedChannel.Channel.Channel.SavedChannelState
-                                let network = connectedChannelAfterRevokeAndAck.Network
-                                let account = connectedChannelAfterRevokeAndAck.Account
-
-                                let perCommitmentSecret = theirRevokeAndAckMsg.PerCommitmentSecret
-
-                                let breachStore = BreachDataStore account
-                                let! breachData =
-                                        breachStore
-                                            .LoadBreachData(connectedChannelAfterRevokeAndAck.ChannelId)
-                                            .InsertRevokedCommitment perCommitmentSecret
-                                                                        savedChannelState
-                                                                        channelPrivKeys
-                                                                        network
-                                                                        account
-                                breachStore.SaveBreachData breachData
-
-                                do! TowerClient.Default.CreateAndSendPunishmentTx perCommitmentSecret
-                                            savedChannelState
-                                            channelPrivKeys
-                                            network
-                                            account
-                                            true
-
-                                return true
-                        | _ ->
-                            let connectedChannelAfterMsgReceived = {
-                                connectedChannel with
-                                    PeerNode = peerNodeAfterMsgReceived
-                            }
-                            let activeChannelAfterMsgReceived = {
-                                activeChannel with
-                                    ConnectedChannel = connectedChannelAfterMsgReceived
-                            }
-                            return! receiveEvent activeChannelAfterMsgReceived
-                    | Error _ ->
-                        return failwith "NIE"
-                with
-                | :? TimeoutException ->
-                    return false
-            }
-
-            let! res = receiveEvent activeChannel
-            return Ok res
+        | Ok _activeChannel ->
+            return Ok ()
     }
 
     member internal self.SendMonoHopPayment (channelId: ChannelIdentifier)
