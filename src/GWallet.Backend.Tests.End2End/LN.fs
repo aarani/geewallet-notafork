@@ -464,131 +464,155 @@ type LN() =
 
     [<Test>]
     member __.``can open channel with LND``() = Async.RunSynchronously <| async {
-        let! _channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = OpenChannelWithFundee None
+        Console.WriteLine("Starting test: can open channel with lnd")
+        try
+            let! _channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = OpenChannelWithFundee None
 
-        TearDown clientWallet bitcoind electrumServer lnd
+            TearDown clientWallet bitcoind electrumServer lnd
+        with
+        | ex ->
+            Console.WriteLine(sprintf "Exception happenend: %s" (ex.ToString()))
     }
 
     [<Test>]
     member __.``can open channel with LND and send htlcs``() = Async.RunSynchronously <| async {
-        let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
+        Console.WriteLine("Starting test: can open channel with LND and send htlcs")
+        try
+            let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
 
-        do! SendHtlcPaymentsToLnd clientWallet lnd channelId fundingAmount
+            do! SendHtlcPaymentsToLnd clientWallet lnd channelId fundingAmount
 
-        TearDown clientWallet bitcoind electrumServer lnd
+            TearDown clientWallet bitcoind electrumServer lnd
+        with
+        | ex ->
+            Console.WriteLine(sprintf "Exception happenend: %s" (ex.ToString()))
     }
 
 
     [<Test>]
     member __.``can close channel with LND``() = Async.RunSynchronously <| async {
+        Console.WriteLine("Starting test: can close channel with LND")
+        try
+            let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
+                try
+                    OpenChannelWithFundee None
+                with
+                | ex ->
+                    Assert.Inconclusive (
+                        sprintf
+                            "Channel-closing inconclusive because Channel open failed, fix this first: %s"
+                            (ex.ToString())
+                    )
+                    failwith "unreachable"
 
-        let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
-            try
-                OpenChannelWithFundee None
-            with
-            | ex ->
-                Assert.Inconclusive (
-                    sprintf
-                        "Channel-closing inconclusive because Channel open failed, fix this first: %s"
-                        (ex.ToString())
-                )
-                failwith "unreachable"
+            let! closeChannelRes = Lightning.Network.CloseChannel clientWallet.NodeClient channelId
+            match closeChannelRes with
+            | Ok _ -> ()
+            | Error err -> return failwith (SPrintF1 "error when closing channel: %s" (err :> IErrorMsg).Message)
 
-        let! closeChannelRes = Lightning.Network.CloseChannel clientWallet.NodeClient channelId
-        match closeChannelRes with
-        | Ok _ -> ()
-        | Error err -> return failwith (SPrintF1 "error when closing channel: %s" (err :> IErrorMsg).Message)
+            match (clientWallet.ChannelStore.ChannelInfo channelId).Status with
+            | ChannelStatus.Closing -> ()
+            | status -> return failwith (SPrintF1 "unexpected channel status. Expected Closing, got %A" status)
 
-        match (clientWallet.ChannelStore.ChannelInfo channelId).Status with
-        | ChannelStatus.Closing -> ()
-        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Closing, got %A" status)
+            // Mine 10 blocks to make sure closing tx is confirmed
+            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 (uint32 10))
 
-        // Mine 10 blocks to make sure closing tx is confirmed
-        bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 (uint32 10))
-
-        let rec waitForClosingTxConfirmed attempt = async {
-            Infrastructure.LogDebug (SPrintF1 "Checking if closing tx is finished, attempt #%d" attempt)
-            if attempt = 10 then
-                return Error "Closing tx not confirmed after maximum attempts"
-            else
-                let! txIsConfirmed = Lightning.Network.CheckClosingFinished clientWallet.ChannelStore channelId
-                if txIsConfirmed then
-                    return Ok ()
+            let rec waitForClosingTxConfirmed attempt = async {
+                Infrastructure.LogDebug (SPrintF1 "Checking if closing tx is finished, attempt #%d" attempt)
+                if attempt = 10 then
+                    return Error "Closing tx not confirmed after maximum attempts"
                 else
-                    do! Async.Sleep 1000
-                    return! waitForClosingTxConfirmed (attempt + 1)
-        }
+                    let! txIsConfirmed = Lightning.Network.CheckClosingFinished clientWallet.ChannelStore channelId
+                    if txIsConfirmed then
+                        return Ok ()
+                    else
+                        do! Async.Sleep 1000
+                        return! waitForClosingTxConfirmed (attempt + 1)
+            }
 
-        let! closingTxConfirmedRes = waitForClosingTxConfirmed 0
-        match closingTxConfirmedRes with
-        | Ok _ -> ()
-        | Error err -> return failwith (SPrintF1 "error when waiting for closing tx to confirm: %s" err)
+            let! closingTxConfirmedRes = waitForClosingTxConfirmed 0
+            match closingTxConfirmedRes with
+            | Ok _ -> ()
+            | Error err -> return failwith (SPrintF1 "error when waiting for closing tx to confirm: %s" err)
 
-        TearDown clientWallet bitcoind electrumServer lnd
+            TearDown clientWallet bitcoind electrumServer lnd
+        with
+        | ex ->
+            Console.WriteLine(sprintf "Exception happenend: %s" (ex.ToString()))
     }
 
     [<Test>]
     member __.``can accept channel from LND``() = Async.RunSynchronously <| async {
-        let! _channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
+        Console.WriteLine("Starting test: can accept channel from LND")
+        try
+            let! _channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
 
-        TearDown serverWallet bitcoind electrumServer lnd
+            TearDown serverWallet bitcoind electrumServer lnd
+        with
+        | ex ->
+            Console.WriteLine(sprintf "Exception happenend: %s" (ex.ToString()))
     }
 
     [<Test>]
     member __.``can accept channel closure from LND``() = Async.RunSynchronously <| async {
-        let! channelId, serverWallet, bitcoind, electrumServer, lnd =
-            try
-                AcceptChannelFromLndFunder ()
-            with
-            | ex ->
-                Assert.Inconclusive (
-                    sprintf
-                        "Channel-closing inconclusive because Channel accept failed, fix this first: %s"
-                        (ex.ToString())
-                )
-                failwith "unreachable"
+        Console.WriteLine("Starting test: can accept channel closure from LND")
+        try
+            let! channelId, serverWallet, bitcoind, electrumServer, lnd =
+                try
+                    AcceptChannelFromLndFunder ()
+                with
+                | ex ->
+                    Assert.Inconclusive (
+                        sprintf
+                            "Channel-closing inconclusive because Channel accept failed, fix this first: %s"
+                            (ex.ToString())
+                    )
+                    failwith "unreachable"
 
-        let channelInfo = serverWallet.ChannelStore.ChannelInfo channelId
+            let channelInfo = serverWallet.ChannelStore.ChannelInfo channelId
 
-        // wait for lnd to realise we're offline
-        do! Async.Sleep 1000
-        let fundingOutPoint =
-            let fundingTxId = uint256(channelInfo.FundingTxId.ToString())
-            let fundingOutPointIndex = channelInfo.FundingOutPointIndex
-            OutPoint(fundingTxId, fundingOutPointIndex)
-        let closeChannelTask = async {
-            do! lnd.ConnectTo serverWallet.NodeEndPoint
+            // wait for lnd to realise we're offline
             do! Async.Sleep 1000
-            do! lnd.CloseChannel fundingOutPoint
-            return ()
-        }
-        let awaitCloseTask = async {
-            let rec receiveEvent () = async {
-                let! receivedEvent = Lightning.Network.ReceiveLightningEvent serverWallet.NodeServer channelId
-                match receivedEvent with
-                | Error err ->
-                    return Error (SPrintF1 "Failed to receive shutdown msg from LND: %A" err)
-                | Ok event when event = IncomingChannelEvent.Shutdown ->
-                    return Ok ()
-                | _ -> return! receiveEvent ()
+            let fundingOutPoint =
+                let fundingTxId = uint256(channelInfo.FundingTxId.ToString())
+                let fundingOutPointIndex = channelInfo.FundingOutPointIndex
+                OutPoint(fundingTxId, fundingOutPointIndex)
+            let closeChannelTask = async {
+                do! lnd.ConnectTo serverWallet.NodeEndPoint
+                do! Async.Sleep 1000
+                do! lnd.CloseChannel fundingOutPoint
+                return ()
+            }
+            let awaitCloseTask = async {
+                let rec receiveEvent () = async {
+                    let! receivedEvent = Lightning.Network.ReceiveLightningEvent serverWallet.NodeServer channelId
+                    match receivedEvent with
+                    | Error err ->
+                        return Error (SPrintF1 "Failed to receive shutdown msg from LND: %A" err)
+                    | Ok event when event = IncomingChannelEvent.Shutdown ->
+                        return Ok ()
+                    | _ -> return! receiveEvent ()
+                }
+
+                let! receiveEventRes = receiveEvent()
+                UnwrapResult receiveEventRes "failed to accept close channel"
+
+                // Wait for the closing transaction to appear in mempool
+                while bitcoind.GetTxIdsInMempool().Length = 0 do
+                    Thread.Sleep 500
+
+                // Mine blocks on top of the closing transaction to make it confirmed.
+                let minimumDepth = BlockHeightOffset32 6u
+                bitcoind.GenerateBlocksToDummyAddress minimumDepth
+                return ()
             }
 
-            let! receiveEventRes = receiveEvent()
-            UnwrapResult receiveEventRes "failed to accept close channel"
+            let! (), () = AsyncExtensions.MixedParallel2 closeChannelTask awaitCloseTask
 
-            // Wait for the closing transaction to appear in mempool
-            while bitcoind.GetTxIdsInMempool().Length = 0 do
-                Thread.Sleep 500
-
-            // Mine blocks on top of the closing transaction to make it confirmed.
-            let minimumDepth = BlockHeightOffset32 6u
-            bitcoind.GenerateBlocksToDummyAddress minimumDepth
-            return ()
-        }
-
-        let! (), () = AsyncExtensions.MixedParallel2 closeChannelTask awaitCloseTask
-
-        TearDown serverWallet bitcoind electrumServer lnd
+            TearDown serverWallet bitcoind electrumServer lnd
+        with
+        | ex ->
+            Console.WriteLine(sprintf "Exception happenend: %s" (ex.ToString()))
 
         return ()
     }
