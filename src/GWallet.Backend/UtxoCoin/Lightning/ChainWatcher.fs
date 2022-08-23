@@ -181,7 +181,7 @@ module public ChainWatcher =
                                             match head with
                                             | HtlcTransaction.Timeout (_, spk, _, _)
                                             | HtlcTransaction.Success (_, spk, _, _) ->
-                                                let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetUnspentTransactionOutputs
+                                                let job = GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetUnspentTransactionOutputs
                                                 let! utxos = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
                                                 if utxos |> Seq.isEmpty then
                                                     return! removeSpentOutputs tail unspentHtlcList

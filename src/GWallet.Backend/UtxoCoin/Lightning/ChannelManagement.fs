@@ -64,7 +64,7 @@ type ChannelStatus =
     | FundingBroadcastButNotLocked of FundingBroadcastButNotLockedData
     | Closing
     | LocallyForceClosed of LocallyForceClosedData
-    | RecoveryTxSent of TransactionIdentifier
+    | RecoveryTxSentOrNotNeeded of option<TransactionIdentifier>
     | Active
 
 type ChannelInfo =
@@ -87,10 +87,14 @@ type ChannelInfo =
                                                      : ChannelInfo =
         let fundingTxId = TransactionIdentifier.FromHash (serializedChannel.FundingScriptCoin().Outpoint.Hash)
         let status =
-            match serializedChannel.RecoveryTxIdOpt with
-            | Some recoveryTxId ->
-                ChannelStatus.RecoveryTxSent recoveryTxId
-            | None ->
+            match serializedChannel.MainBalanceRecoveryStatus with
+            | RecoveryTxSent txId ->
+                txId
+                |> Some
+                |> ChannelStatus.RecoveryTxSentOrNotNeeded
+            | NotNeeded ->
+                ChannelStatus.RecoveryTxSentOrNotNeeded None
+            | Unresolved ->
                 match serializedChannel.ForceCloseTxIdOpt with
                 | Some forceCloseTxId ->
                     ChannelStatus.LocallyForceClosed {
@@ -388,6 +392,17 @@ module ChannelManager =
         let dummyAddr = NBitcoin.BitcoinWitScriptAddress (nullScriptId, network)
         UtxoCoin.Account.EstimateFeeForDestination (account :?> IUtxoAccount) amount dummyAddr
 
+    let MarkRecoveryTxAsNotNeeded
+        (channelId: ChannelIdentifier)
+        (channelStore: ChannelStore)
+        =
+        let channelPreRecovery = channelStore.LoadChannel channelId
+        let channelAfterRecovery =
+            { channelPreRecovery with
+                MainBalanceRecoveryStatus = NotNeeded
+            }
+        channelStore.SaveChannel channelAfterRecovery
+
     let BroadcastRecoveryTxAndCloseChannel
         (recoveryTx: RecoveryTx)
         (channelStore: ChannelStore)
@@ -401,10 +416,10 @@ module ChannelManager =
                     (recoveryTx.Tx.ToString())
             let channelAfterRecovery =
                 { channelPreRecovery with
-                    RecoveryTxIdOpt =
+                    MainBalanceRecoveryStatus =
                         recoveryTx.Tx.NBitcoinTx.GetHash()
                         |> TransactionIdentifier.FromHash
-                        |> Some
+                        |> RecoveryTxSent
                 }
             channelStore.SaveChannel channelAfterRecovery
             return txId
@@ -461,26 +476,6 @@ module ChannelManager =
             
             channelStore.SaveChannel channelAfterRecovery
             return txId
-        }
-
-    let CheckForConfirmedRecovery
-        (channelStore: ChannelStore)
-        (_channelId: ChannelIdentifier)
-        (recoveryTxId: TransactionIdentifier)
-        =
-        async {
-            let currency = channelStore.Currency
-            let! confirmationCount =
-                Server.Query
-                    currency
-                    (QuerySettings.Default ServerSelectionMode.Fast)
-                    (ElectrumClient.GetConfirmations (recoveryTxId.ToString()))
-                    None
-            if BlockHeightOffset32 confirmationCount >= Settings.DefaultTxMinimumDepth currency then
-                //channelStore.ArchiveChannel channelId
-                return true
-            else
-                return false
         }
 
     type MutualCloseCpfpCreationError =
@@ -622,4 +617,39 @@ module ChannelManager =
             HtlcResolveDetails.Unresolved = unresolvedHtlcs
             WaitingForConfirmationToRecover = channel.HtlcDelayedTxs
             Resolved = recoveredHtlcs
+        }
+
+    let CheckForFinishedRecoveryAndArchive
+        (channelStore: ChannelStore)
+        (channelId: ChannelIdentifier)
+        (recoveryTxIdOpt: option<TransactionIdentifier>)
+        =
+        async {
+            let currency = channelStore.Currency
+            let! confirmationCount =
+                async {
+                    match recoveryTxIdOpt with
+                    | Some recoveryTxId ->
+                        let! confirmationCount =
+                            Server.Query
+                                currency
+                                (QuerySettings.Default ServerSelectionMode.Fast)
+                                (ElectrumClient.GetConfirmations (recoveryTxId.ToString()))
+                                None
+                        return BlockHeightOffset32 confirmationCount
+                    | None ->
+                        // Recovery tx was not needed so we fake it as confirmed
+                        return Settings.DefaultTxMinimumDepth currency
+                }
+            if confirmationCount >= Settings.DefaultTxMinimumDepth currency then
+                let noInProgressHtlcRecovery =
+                    let allHtlcs = ListAllHtlcs channelStore channelId
+                    allHtlcs.WaitingForConfirmationToRecover.IsEmpty && allHtlcs.Unresolved.IsEmpty
+                if noInProgressHtlcRecovery then
+                    channelStore.ArchiveChannel channelId
+                    return true
+                else 
+                    return false
+            else
+                return false
         }

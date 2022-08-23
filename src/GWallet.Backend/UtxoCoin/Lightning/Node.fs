@@ -687,13 +687,8 @@ type Node =
             let commitmentTx = self.ChannelStore.GetCommitmentTx channelId
             let serializedChannel = self.ChannelStore.LoadChannel channelId
             let! forceCloseTxId = UtxoCoin.Account.BroadcastRawTransaction self.Account.Currency (commitmentTx.ToString())
-            // This should still be done once here to make sure local output isn't dust
-            //let! recoveryTxResult = self.CreateRecoveryTxForForceClose channelId commitmentTx
-            //match recoveryTxResult with
-            //| Error err ->
-            //    self.ChannelStore.ArchiveChannel channelId
-            //    return Error err
-            //| Ok _recoveryTx ->
+            // We keep this here so it can mark the channel as recoveryUnneeded if balance is below dust limit
+            do! self.CreateRecoveryTxForForceClose channelId commitmentTx |> Async.Ignore
             let newSerializedChannel = {
                 serializedChannel with
                     ForceCloseTxIdOpt =
@@ -754,14 +749,15 @@ type Node =
                     }
                 return Ok recoveryTransaction
             | { MainOutput = Error BalanceBelowDustLimit } ->
+                ChannelManager.MarkRecoveryTxAsNotNeeded channelId self.ChannelStore
                 return Error <| ClosingBalanceBelowDustLimit
             | { MainOutput = Error UnknownClosingTx } ->
                 return failwith "Unknown closing tx has been broadcast"
             | { MainOutput = Error Inapplicable } ->
                 return failwith "Main output can never be inapplicable"
         }
-    //FIXME: name
-    member self.CreateHtlcTxForListHead
+
+    member self.CreateHtlcTxForHtlcTxsList
         (htlcTransactions: HtlcTxsList)
         (password: string)
         : Async<HtlcTx * HtlcTxsList> =
@@ -825,13 +821,13 @@ type Node =
                                     NBitcoin.DataEncoders.Encoders.Hex.EncodeData reversedSha
 
                                 let spk = redeemScript.WitHash.ScriptPubKey
-                                let N =
+                                let outputIndex =
                                     (closingTx.Outputs.AsIndexedOutputs()
                                     |> Seq.find (fun output -> output.TxOut.ScriptPubKey = spk)).N
                             
                                 let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetUnspentTransactionOutputs
                                 let! utxos = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
-                                if not (utxos |> Seq.exists (fun utxo -> utxo.TxHash = closingTx.GetHash().ToString() && utxo.TxPos = int N)) then
+                                if not (utxos |> Seq.exists (fun utxo -> utxo.TxHash = closingTx.GetHash().ToString() && utxo.TxPos = int outputIndex)) then
                                     let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetBlockchainScriptHashHistory
                                     let! hashHistory = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
                                     let findSpending2ndStage (spendingTx: BlockchainScriptHashHistoryInnerResult) =
@@ -841,7 +837,7 @@ type Node =
                                             let spendingTx = Transaction.Parse (spendingTxStr, network)
                                             let spendingTxInput =
                                                 spendingTx.Inputs
-                                                |> Seq.tryFind (fun inp -> inp.PrevOut.Hash = closingTx.GetHash() && inp.PrevOut.N = N)
+                                                |> Seq.tryFind (fun inp -> inp.PrevOut.Hash = closingTx.GetHash() && inp.PrevOut.N = outputIndex)
                                             if spendingTxInput.IsSome then
                                                 return Some spendingTx
                                             else

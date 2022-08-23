@@ -1,4 +1,4 @@
-// because of the use of internal AcceptCloseChannel and ReceiveMonoHopPayment
+// because of the use of internal AcceptCloseChannel
 #nowarn "44"
 
 namespace GWallet.Backend.Tests.End2End
@@ -371,7 +371,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel-closing inconclusive because sending of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel-closing inconclusive because sending of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -419,7 +419,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel remote-force-closing inconclusive because sending of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel remote-force-closing inconclusive because sending of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -504,7 +504,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel remote-force-closing inconclusive because receiving of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel remote-force-closing inconclusive because receiving of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -558,7 +558,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel remote-force-closing inconclusive because sending of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel remote-force-closing inconclusive because sending of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -635,7 +635,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel remote-force-closing inconclusive because receiving of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel remote-force-closing inconclusive because receiving of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -941,7 +941,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: CPFP inconclusive because sending of monohop payments failed, fix this first: %s"
+                    "Inconclusive: CPFP inconclusive because sending of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -1011,7 +1011,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: CPFP inconclusive because receiving of monohop payments failed, fix this first: %s"
+                    "Inconclusive: CPFP inconclusive because receiving of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -1054,7 +1054,7 @@ type LN() =
             | ex ->
                 Assert.Fail (
                     sprintf
-                        "Inconclusive: monohop-sending inconclusive because Channel open failed, fix this first: %s"
+                        "Inconclusive: htlc-sending inconclusive because Channel open failed, fix this first: %s"
                         (ex.ToString())
                 )
                 failwith "unreachable"
@@ -1141,7 +1141,7 @@ type LN() =
             | ex ->
                 Assert.Fail (
                     sprintf
-                        "Inconclusive: monohop-sending inconclusive because Channel open failed, fix this first: %s"
+                        "Inconclusive: htlc-sending inconclusive because Channel open failed, fix this first: %s"
                         (ex.ToString())
                 )
                 failwith "unreachable"
@@ -1225,7 +1225,7 @@ type LN() =
                 if readyToBroadcastList.IsEmpty() then
                     return feeSum
                 else
-                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForListHead readyToBroadcastHtlcTxs clientWallet.Password
+                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs clientWallet.Password
                     Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
 
                     do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx clientWallet.ChannelStore |> Async.Ignore
@@ -1320,7 +1320,7 @@ type LN() =
                             if readyToBroadcastList.IsEmpty() then
                                 return feeSum
                             else
-                                let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForListHead readyToBroadcastHtlcTxs serverWallet.Password
+                                let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
                                 Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
                                 do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
 
@@ -1377,7 +1377,7 @@ type LN() =
             | ex ->
                 Assert.Fail (
                     sprintf
-                        "Inconclusive: monohop-sending inconclusive because Channel open failed, fix this first: %s"
+                        "Inconclusive: htlc-sending inconclusive because Channel open failed, fix this first: %s"
                         (ex.ToString())
                 )
                 failwith "unreachable"
@@ -1489,7 +1489,7 @@ type LN() =
                 if readyToBroadcastList.IsEmpty() then
                     return feeSum
                 else
-                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForListHead readyToBroadcastHtlcTxs clientWallet.Password
+                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs clientWallet.Password
                     Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
 
                     do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx clientWallet.ChannelStore |> Async.Ignore
@@ -1585,7 +1585,7 @@ type LN() =
                         if readyToBroadcastList.IsEmpty() then
                             return feeSum
                         else
-                            let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForListHead readyToBroadcastHtlcTxs serverWallet.Password
+                            let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
                             Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
                             do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
 
@@ -1612,7 +1612,7 @@ type LN() =
 
     [<Category "G2G_ChannelLocalForceClosing_Funder">]
     [<Test>]
-    member __.``can send monohop payments and handle local force-close of channel (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send htlc payments and handle local force-close of channel (funder)``() = Async.RunSynchronously <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -1632,7 +1632,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel local-force-closing inconclusive because sending of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel local-force-closing inconclusive because sending of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -1688,7 +1688,7 @@ type LN() =
 
     [<Category "G2G_ChannelLocalForceClosing_Fundee">]
     [<Test>]
-    member __.``can receive monohop payments and handle local force-close of channel (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive htlc payments and handle local force-close of channel (fundee)``() = Async.RunSynchronously <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -1707,7 +1707,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel remote-force-closing inconclusive because receiving of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel remote-force-closing inconclusive because receiving of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -1847,7 +1847,7 @@ type LN() =
                 if readyToBroadcastList.IsEmpty() then
                     return feeSum
                 else
-                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForListHead readyToBroadcastHtlcTxs clientWallet.Password
+                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs clientWallet.Password
                     do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx clientWallet.ChannelStore |> Async.Ignore
 
                     bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
@@ -1886,9 +1886,9 @@ type LN() =
             do! lnd.SendPayment invoice1InString
         }
         let receiveGeewalletPayment = async {
-            let! receiveMonoHopPaymentRes =
+            let! receiveHtlcPaymentRes =
                 Lightning.Network.ReceiveLightningEvent serverWallet.NodeServer channelId true
-            return UnwrapResult receiveMonoHopPaymentRes "ReceiveMonoHopPayment failed"
+            return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
         }
 
         let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
@@ -1935,9 +1935,9 @@ type LN() =
             lnd.SendPayment invoice1InString |> Async.Start
         }
         let receiveGeewalletPayment = async {
-            let! receiveMonoHopPaymentRes =
+            let! receiveHtlcPaymentRes =
                 Lightning.Network.ReceiveLightningEvent serverWallet.NodeServer channelId false
-            return UnwrapResult receiveMonoHopPaymentRes "ReceiveMonoHopPayment failed"
+            return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
         }
 
         let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
@@ -1999,7 +1999,7 @@ type LN() =
                     if readyToBroadcastList.IsEmpty() then
                         return feeSum
                     else
-                        let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForListHead readyToBroadcastHtlcTxs serverWallet.Password
+                        let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
                         do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
                         bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
@@ -2041,9 +2041,9 @@ type LN() =
             lnd.SendPayment invoice1InString |> Async.Start
         }
         let receiveGeewalletPayment = async {
-            let! receiveMonoHopPaymentRes =
+            let! receiveHtlcPaymentRes =
                 Lightning.Network.ReceiveLightningEvent serverWallet.NodeServer channelId false
-            return UnwrapResult receiveMonoHopPaymentRes "ReceiveMonoHopPayment failed"
+            return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
         }
 
         let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
@@ -2106,7 +2106,7 @@ type LN() =
                     if readyToBroadcastList.IsEmpty() then
                         return feeSum
                     else
-                        let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForListHead readyToBroadcastHtlcTxs serverWallet.Password
+                        let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
                         Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
 
                         do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
@@ -2245,7 +2245,7 @@ type LN() =
                 if readyToBroadcastList.IsEmpty() then
                     return feeSum
                 else
-                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForListHead readyToBroadcastHtlcTxs clientWallet.Password
+                    let! htlcTx, rest = (Lightning.Node.Client clientWallet.NodeClient).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs clientWallet.Password
                     Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
 
                     do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx clientWallet.ChannelStore |> Async.Ignore
@@ -2502,7 +2502,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: UpdateFee message support inconclusive because sending of monohop payments failed, fix this first: %s"
+                    "Inconclusive: UpdateFee message support inconclusive because sending of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -2521,7 +2521,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: sending of monohop payments failed after UpdateFee message handling: %s"
+                    "Inconclusive: sending of htlc payments failed after UpdateFee message handling: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -2554,7 +2554,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: UpdateFee message support inconclusive because receiving of monohop payments failed, fix this first: %s"
+                    "Inconclusive: UpdateFee message support inconclusive because receiving of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -2570,7 +2570,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: receiving of monohop payments failed after UpdateFee message handling: %s"
+                    "Inconclusive: receiving of htlc payments failed after UpdateFee message handling: %s"
                     (ex.ToString())
             )
             failwith "unreachable"
@@ -2606,7 +2606,7 @@ type LN() =
         | ex ->
             Assert.Fail (
                 sprintf
-                    "Inconclusive: channel-closing inconclusive because sending of monohop payments failed, fix this first: %s"
+                    "Inconclusive: channel-closing inconclusive because sending of htlc payments failed, fix this first: %s"
                     (ex.ToString())
             )
             failwith "unreachable"

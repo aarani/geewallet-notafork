@@ -709,22 +709,31 @@ module LayerTwo =
                         let nodeClient = Lightning.Connection.StartClient channelStore password
                         let commitmentTx = channelStore.GetCommitmentTx channelInfo.ChannelId
                         let! recoveryTxResult = (Node.Client nodeClient).CreateRecoveryTxForForceClose channelInfo.ChannelId commitmentTx
-                        let recoveryTx = UnwrapResult recoveryTxResult "BUG: we should've checked that output is not dust when initiating the force-close"
-                        if UserInteraction.ConfirmTxFee recoveryTx.Fee then
-                            let! txId =
-                                ChannelManager.BroadcastRecoveryTxAndCloseChannel recoveryTx channelStore
+                        match recoveryTxResult with
+                        | Ok recoveryTx ->
+                            if UserInteraction.ConfirmTxFee recoveryTx.Fee then
+                                let! txId =
+                                    ChannelManager.BroadcastRecoveryTxAndCloseChannel recoveryTx channelStore
+                                return seq {
+                                    yield! UserInteraction.DisplayLightningChannelStatus channelInfo
+                                    yield sprintf "        channel force-closed"
+                                    yield sprintf "        funds have been recovered and sent back to the wallet"
+                                    yield sprintf "        txid of recovery transaction is %s" txId
+                                }
+                            else
+                                return seq {
+                                    yield! UserInteraction.DisplayLightningChannelStatus channelInfo
+                                    yield sprintf "        channel force-closed"
+                                    yield sprintf "        funds have not been recovered yet"
+                                }
+                        | Error ClosingBalanceBelowDustLimit ->
                             return seq {
                                 yield! UserInteraction.DisplayLightningChannelStatus channelInfo
-                                yield sprintf "        channel force-closed"
-                                yield sprintf "        funds have been recovered and sent back to the wallet"
-                                yield sprintf "        txid of recovery transaction is %s" txId
+                                yield "        channel closed by us"
+                                yield "        Local channel balance was too small (below the \"dust\" limit) so no funds were recovered."
                             }
-                        else
-                            return seq {
-                                yield! UserInteraction.DisplayLightningChannelStatus channelInfo
-                                yield sprintf "        channel force-closed"
-                                yield sprintf "        funds have not been recovered yet"
-                            }
+                        | Error err ->
+                            return failwith <| SPrintF1 "BUG: CreateRecoveryTxForForceClose returned error(%A) when claiming main balance after local force close" err
                     }
                 return!
                     trySendRecoveryTx
@@ -1011,7 +1020,7 @@ module LayerTwo =
             | _ ->
                 return justChannelBeingClosedInfo
         }
-    //TODO: add good user-friendly msgs here
+
     let HandleReadyToResolveHtlc (accounts: seq<IAccount>) =
         async {
             let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
@@ -1027,11 +1036,10 @@ module LayerTwo =
                                 return ()
                             else
                                 let nodeClient = Lightning.Connection.StartClient channelStore password
-                                let! htlcTx, htlcTxsList = (Node.Client nodeClient).CreateHtlcTxForListHead htlcTxsList password
+                                let! htlcTx, htlcTxsList = (Node.Client nodeClient).CreateHtlcTxForHtlcTxsList htlcTxsList password
                                 if htlcTx.IsDust() then
                                     return! tryCreateHtlcTx htlcTxsList password
                                 else
-                                    //TODO: ask user's permission with htlc amount + fee ammount
                                     do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx channelStore |> Async.Ignore
                                     return! tryCreateHtlcTx htlcTxsList password
                         }
@@ -1039,7 +1047,6 @@ module LayerTwo =
                         do! tryCreateHtlcTx htlcTxsList |> UserInteraction.TryWithPasswordAsync
         }
 
-    //TODO: add good user-friendly msgs here
     let HandleReadyToRecoverDelayedHtlcs (accounts: seq<IAccount>) =
         async {
             let normalUtxoAccounts = accounts.OfType<UtxoCoin.NormalUtxoAccount>()
@@ -1150,14 +1157,14 @@ module LayerTwo =
                                         channelInfo
                                         locallyForceClosedData
                         }
-                    | ChannelStatus.RecoveryTxSent recoveryTxId -> 
+                    | ChannelStatus.RecoveryTxSentOrNotNeeded recoveryTxIdOpt -> 
                         yield async {
-                            let noInProgressHtlcRecovery =
-                                (ChannelManager.ListAllHtlcs channelStore channelId)
-                                    .WaitingForConfirmationToRecover
-                                    .IsEmpty
-                            let! isRecoveryTxConfirmed = ChannelManager.CheckForConfirmedRecovery channelStore channelId recoveryTxId
-                            if isRecoveryTxConfirmed && noInProgressHtlcRecovery then
+                            let! isRecoveryFinished =
+                                ChannelManager.CheckForFinishedRecoveryAndArchive
+                                    channelStore
+                                    channelId
+                                    recoveryTxIdOpt
+                            if isRecoveryFinished then
                                 return
                                     fun () ->
                                         async {
