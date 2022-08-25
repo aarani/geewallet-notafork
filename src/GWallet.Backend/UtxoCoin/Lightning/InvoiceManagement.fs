@@ -115,8 +115,14 @@ type internal InvoiceDataStore(account: NormalUtxoAccount) =
         File.WriteAllText(fileName, json)
 
 type InvoiceManagement (account: NormalUtxoAccount, password: string) =
+    member self.CreateInvoice (amount: TransferAmount) (description: string) =
+        let amountInSatoshis =
+            Money(amount.ValueToSend, MoneyUnit.BTC).Satoshi
+            |> uint64
 
-    member self.CreateInvoice (amountInSatoshis: uint64) (description: string) =
+        self.CreateInvoiceInSatoshis amountInSatoshis description
+
+    member __.CreateInvoiceInSatoshis (amountInSatoshis: AmountInSatoshis) (description: string) =
 
         let rngEngine = RandomNumberGenerator.Create()
         let preImage =

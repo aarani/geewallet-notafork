@@ -487,15 +487,15 @@ module LayerTwo =
             //FIXME: better messages
             let rec createInvoice password =
                 async {
-                    let amountInSatoshisOpt =
-                        UserInteraction.Ask Convert.ToUInt64 "Enter invoice amount in satoshis"
-                    match amountInSatoshisOpt with
-                    | Some amountInSatoshis ->
+                    let amountOpt =
+                        UserInteraction.AskInvoiceAmount account
+                    match amountOpt with
+                    | Some amount ->
                         let descriptionOpt = UserInteraction.Ask id "Enter invoice description"
                         match descriptionOpt with
                         | Some description ->
                             let invoiceManager = InvoiceManagement (account, password)
-                            let invoiceInString = invoiceManager.CreateInvoice amountInSatoshis description
+                            let invoiceInString = invoiceManager.CreateInvoice amount description
                             Console.WriteLine (sprintf "Invoice: %s" invoiceInString)
                         | None ->
                             return! createInvoice password

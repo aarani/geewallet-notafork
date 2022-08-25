@@ -254,7 +254,7 @@ type LN() =
                 return failwith "incorrect lnd balance after payment 2"
         }
 
-    let SendHtlcPaymentToGW (channelId) (clientWallet: ClientWalletInstance) (fileName: string) =
+    let SendHtlcPaymentToGW (channelId) (clientWallet: ClientWalletInstance) (fileNameInTmpFolder: string) =
         async {
             let! invoiceInString =
                 let rec readInvoice (path: string) =
@@ -272,7 +272,7 @@ type LN() =
                             return! readInvoice path
                     }
 
-                readInvoice (Path.Combine (Path.GetTempPath(), fileName))
+                readInvoice (Path.Combine (Path.GetTempPath(), fileNameInTmpFolder))
 
             return!
                 Lightning.Network.SendHtlcPayment
@@ -282,12 +282,12 @@ type LN() =
                     true
         }
 
-    let ReceiveHtlcPaymentToGW (channelId) (serverWallet: ServerWalletInstance) (fileName: string) =
+    let ReceiveHtlcPaymentFromGW (channelId) (serverWallet: ServerWalletInstance) (fileName: string) =
         async {
             let invoiceManager = InvoiceManagement (serverWallet.Account :?> NormalUtxoAccount, serverWallet.Password)
             let amountInSatoshis =
                 Convert.ToUInt64 walletToWalletTestPayment1Amount.Satoshi
-            let invoice1InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 1"
+            let invoice1InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 1"
 
             File.WriteAllText (Path.Combine (Path.GetTempPath(), fileName), invoice1InString)
 
@@ -349,6 +349,69 @@ type LN() =
         | Error err -> return failwith (SPrintF1 "failed to accept close channel: %A" err)
     }
 
+    [<Category "G2G_HtlcPayment_Funder">]
+    [<Test>]
+    member __.``can send htlc payments, with geewallet (funder)``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
+            try
+                OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
+            with
+            | ex ->
+                Assert.Fail (
+                    sprintf
+                        "Inconclusive: htlc-sending inconclusive because Channel open failed, fix this first: %s"
+                        (ex.ToString())
+                )
+                failwith "unreachable"
+
+        let channelInfoBeforeAnyPayment = clientWallet.ChannelStore.ChannelInfo channelId
+        match channelInfoBeforeAnyPayment.Status with
+        | ChannelStatus.Active -> ()
+        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+
+        let! sendHtlcPayment1Res =
+            SendHtlcPaymentToGW channelId clientWallet "invoice.txt"
+
+        UnwrapResult sendHtlcPayment1Res "SendHtlcPayment failed"
+
+        let channelInfoAfterPayment1 = clientWallet.ChannelStore.ChannelInfo channelId
+        match channelInfoAfterPayment1.Status with
+        | ChannelStatus.Active -> ()
+        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+
+        if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> fundingAmount - walletToWalletTestPayment1Amount then
+            return failwith "incorrect balance after payment 1"
+
+        TearDown clientWallet bitcoind electrumServer lnd
+    }
+
+
+    [<Category "G2G_HtlcPayment_Fundee">]
+    [<Test>]
+    member __.``can receive htlc payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+        let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
+
+        let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
+        match channelInfoBeforeAnyPayment.Status with
+        | ChannelStatus.Active -> ()
+        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+
+        let balanceBeforeAnyPayment = Money(channelInfoBeforeAnyPayment.Balance, MoneyUnit.BTC)
+
+        let! _htlcStatus =
+            ReceiveHtlcPaymentFromGW channelId serverWallet "invoice.txt"
+
+        let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
+        match channelInfoAfterPayment1.Status with
+        | ChannelStatus.Active -> ()
+        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+
+        if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> balanceBeforeAnyPayment + walletToWalletTestPayment1Amount then
+            return failwith "incorrect balance after receiving payment 1"
+
+        (serverWallet :> IDisposable).Dispose()
+    }
+
     [<Category "G2G_ChannelClosingAfterSendingHTLCPayments_Funder">]
     [<Test>]
     member __.``can close channel after sending HTLC payments (funder)``() = Async.RunSynchronously <| async {
@@ -387,7 +450,7 @@ type LN() =
     member __.``can close channel after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
-        do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+        do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice.txt" |> Async.Ignore
 
         let! closeChannelRes = Lightning.Network.AcceptCloseChannel serverWallet.NodeServer channelId
         match closeChannelRes with
@@ -499,7 +562,7 @@ type LN() =
                 failwith "unreachable"
 
         try
-            do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+            do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice.txt" |> Async.Ignore
         with
         | ex ->
             Assert.Fail (
@@ -630,7 +693,7 @@ type LN() =
                 failwith "unreachable"
 
         try
-            do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+            do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice.txt" |> Async.Ignore
         with
         | ex ->
             Assert.Fail (
@@ -878,7 +941,7 @@ type LN() =
         if Money(channelInfo.Balance, MoneyUnit.BTC) <> Money(0.0m, MoneyUnit.BTC) then
             return failwith "incorrect balance after accepting channel"
 
-        do! ReceiveHtlcPaymentToGW channelId walletInstance "invoice-1.txt" |> Async.Ignore
+        do! ReceiveHtlcPaymentFromGW channelId walletInstance "invoice-1.txt" |> Async.Ignore
 
         let channelInfoAfterPayment1 = walletInstance.ChannelStore.ChannelInfo channelId
         match channelInfo.Status with
@@ -888,7 +951,7 @@ type LN() =
         if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> walletToWalletTestPayment1Amount then
             return failwith "incorrect balance after receiving payment 1"
 
-        do! ReceiveHtlcPaymentToGW channelId walletInstance "invoice-2.txt" |> Async.Ignore
+        do! ReceiveHtlcPaymentFromGW channelId walletInstance "invoice-2.txt" |> Async.Ignore
 
         let channelInfoAfterPayment2 = walletInstance.ChannelStore.ChannelInfo channelId
         match channelInfo.Status with
@@ -1006,7 +1069,7 @@ type LN() =
                 failwith "unreachable"
 
         try
-            do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+            do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice.txt" |> Async.Ignore
         with
         | ex ->
             Assert.Fail (
@@ -1043,66 +1106,106 @@ type LN() =
         (serverWallet :> IDisposable).Dispose()
     }
 
-
-    [<Category "G2G_HtlcPayment_Funder">]
+    [<Category "G2G_UpdateFeeMsg_Funder">]
     [<Test>]
-    member __.``can send htlc payments, with geewallet (funder)``() = Async.RunSynchronously <| async {
-        let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
+    member __.``can update fee after sending htlc payments (funder)``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
             with
             | ex ->
                 Assert.Fail (
                     sprintf
-                        "Inconclusive: htlc-sending inconclusive because Channel open failed, fix this first: %s"
+                        "Inconclusive: UpdateFee message support inconclusive because Channel open failed, fix this first: %s"
                         (ex.ToString())
                 )
                 failwith "unreachable"
+        let! feeRate = ElectrumServer.EstimateFeeRate()
 
-        let channelInfoBeforeAnyPayment = clientWallet.ChannelStore.ChannelInfo channelId
-        match channelInfoBeforeAnyPayment.Status with
-        | ChannelStatus.Active -> ()
-        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+        try
+            let! sendPaymentRes = SendHtlcPaymentToGW channelId clientWallet "invoice-1.txt"
+            UnwrapResult sendPaymentRes "sending htlc failed."
+        with
+        | ex ->
+            Assert.Fail (
+                sprintf
+                    "Inconclusive: UpdateFee message support inconclusive because sending of htlc payments failed, fix this first: %s"
+                    (ex.ToString())
+            )
+            failwith "unreachable"
 
-        let! sendHtlcPayment1Res =
-            SendHtlcPaymentToGW channelId clientWallet "invoice.txt"
+        ElectrumServer.SetEstimatedFeeRate (feeRate * 4u)
+        let! newFeeRateOpt = clientWallet.ChannelStore.FeeUpdateRequired channelId
+        let newFeeRate = UnwrapOption newFeeRateOpt "Fee update should be required"
+        let! updateFeeRes =
+            (Node.Client clientWallet.NodeClient).UpdateFee channelId newFeeRate None
+        UnwrapResult updateFeeRes "UpdateFee failed"
 
-        UnwrapResult sendHtlcPayment1Res "SendHtlcPayment failed"
+        try
+            let! sendPaymentRes = SendHtlcPaymentToGW channelId clientWallet "invoice-2.txt"
+            UnwrapResult sendPaymentRes "sending htlc failed."
+        with
+        | ex ->
+            Assert.Fail (
+                sprintf
+                    "Inconclusive: sending of htlc payments failed after UpdateFee message handling: %s"
+                    (ex.ToString())
+            )
+            failwith "unreachable"
 
-        let channelInfoAfterPayment1 = clientWallet.ChannelStore.ChannelInfo channelId
-        match channelInfoAfterPayment1.Status with
-        | ChannelStatus.Active -> ()
-        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
-
-        if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> fundingAmount - walletToWalletTestPayment1Amount then
-            return failwith "incorrect balance after payment 1"
+        do! ClientCloseChannel clientWallet bitcoind channelId
 
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
-
-    [<Category "G2G_HtlcPayment_Fundee">]
+    [<Category "G2G_UpdateFeeMsg_Fundee">]
     [<Test>]
-    member __.``can receive htlc payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
-        let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
+    member __.``can accept fee update after receiving htlc payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+        let! serverWallet, channelId =
+            try
+                AcceptChannelFromGeewalletFunder ()
+            with
+            | ex ->
+                Assert.Fail (
+                    sprintf
+                        "Inconclusive: UpdateFee message support inconclusive because Channel accept failed, fix this first: %s"
+                        (ex.ToString())
+                )
+                failwith "unreachable"
 
-        let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
-        match channelInfoBeforeAnyPayment.Status with
-        | ChannelStatus.Active -> ()
-        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+        let! feeRate = ElectrumServer.EstimateFeeRate()
 
-        let balanceBeforeAnyPayment = Money(channelInfoBeforeAnyPayment.Balance, MoneyUnit.BTC)
+        try
+            do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice-1.txt" |> Async.Ignore
+        with
+        | ex ->
+            Assert.Fail (
+                sprintf
+                    "Inconclusive: UpdateFee message support inconclusive because receiving of htlc payments failed, fix this first: %s"
+                    (ex.ToString())
+            )
+            failwith "unreachable"
 
-        let! _htlcStatus =
-            ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt"
+        ElectrumServer.SetEstimatedFeeRate (feeRate * 4u)
+        let! acceptUpdateFeeRes =
+            Lightning.Network.AcceptUpdateFee serverWallet.NodeServer channelId
+        UnwrapResult acceptUpdateFeeRes "AcceptUpdateFee failed"
 
-        let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
-        match channelInfoAfterPayment1.Status with
-        | ChannelStatus.Active -> ()
-        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+        try
+            do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice-2.txt" |> Async.Ignore
+        with
+        | ex ->
+            Assert.Fail (
+                sprintf
+                    "Inconclusive: receiving of htlc payments failed after UpdateFee message handling: %s"
+                    (ex.ToString())
+            )
+            failwith "unreachable"
 
-        if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> balanceBeforeAnyPayment + walletToWalletTestPayment1Amount then
-            return failwith "incorrect balance after receiving payment 1"
+        let! closeChannelRes = Lightning.Network.AcceptCloseChannel serverWallet.NodeServer channelId
+        match closeChannelRes with
+        | Ok _ -> ()
+        | Error err -> return failwith (SPrintF1 "failed to accept close channel: %A" err)
 
         (serverWallet :> IDisposable).Dispose()
     }
@@ -1256,8 +1359,8 @@ type LN() =
         let invoiceManager = InvoiceManagement (serverWallet.Account :?> NormalUtxoAccount, serverWallet.Password)
         let amountInSatoshis =
             Convert.ToUInt64 walletToWalletTestPayment1Amount.Satoshi
-        let invoice1InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 1"
-        let invoice2InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 2"
+        let invoice1InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 1"
+        let invoice2InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 2"
 
         File.WriteAllText (Path.Combine (Path.GetTempPath(), "invoice-1.txt"), invoice1InString)
         File.WriteAllText (Path.Combine (Path.GetTempPath(), "invoice-2.txt"), invoice2InString)
@@ -1519,8 +1622,8 @@ type LN() =
         let invoiceManager = InvoiceManagement (serverWallet.Account :?> NormalUtxoAccount, serverWallet.Password)
         let amountInSatoshis =
             Convert.ToUInt64 walletToWalletTestPayment1Amount.Satoshi
-        let invoice1InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 1"
-        let invoice2InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 2"
+        let invoice1InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 1"
+        let invoice2InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 2"
 
         File.WriteAllText (Path.Combine (Path.GetTempPath(), "invoice-1.txt"), invoice1InString)
         File.WriteAllText (Path.Combine (Path.GetTempPath(), "invoice-2.txt"), invoice2InString)
@@ -1702,7 +1805,7 @@ type LN() =
                 failwith "unreachable"
 
         try
-            do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+            do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice.txt" |> Async.Ignore
         with
         | ex ->
             Assert.Fail (
@@ -1881,7 +1984,7 @@ type LN() =
 
             let amountInSatoshis =
                 Convert.ToUInt64 walletToWalletTestPayment1Amount.Satoshi
-            let invoice1InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 1"
+            let invoice1InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 1"
 
             do! lnd.SendPayment invoice1InString
         }
@@ -1929,7 +2032,7 @@ type LN() =
 
             let amountInSatoshis =
                 Convert.ToUInt64 walletToWalletTestPayment1Amount.Satoshi
-            let invoice1InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 1"
+            let invoice1InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 1"
 
             // We use `Async.Start` because send payment api doesn't return until payment is settled (which doesn't happen immediately in this test)
             lnd.SendPayment invoice1InString |> Async.Start
@@ -2035,7 +2138,7 @@ type LN() =
 
             let amountInSatoshis =
                 Convert.ToUInt64 walletToWalletTestPayment1Amount.Satoshi
-            let invoice1InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 1"
+            let invoice1InString = invoiceManager.CreateInvoiceInSatoshis amountInSatoshis "Payment 1"
 
             // We use `Async.Start` because send payment api doesn't return until payment is settled (which doesn't happen immediately in this test)
             lnd.SendPayment invoice1InString |> Async.Start
@@ -2477,112 +2580,6 @@ type LN() =
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
-
-    [<Category "G2G_UpdateFeeMsg_Funder">]
-    [<Test>]
-    member __.``can update fee after sending htlc payments (funder)``() = Async.RunSynchronously <| async {
-        let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
-            try
-                OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
-            with
-            | ex ->
-                Assert.Fail (
-                    sprintf
-                        "Inconclusive: UpdateFee message support inconclusive because Channel open failed, fix this first: %s"
-                        (ex.ToString())
-                )
-                failwith "unreachable"
-        let! feeRate = ElectrumServer.EstimateFeeRate()
-
-        try
-            let! sendPaymentRes = SendHtlcPaymentToGW channelId clientWallet "invoice-1.txt"
-            UnwrapResult sendPaymentRes "sending htlc failed."
-        with
-        | ex ->
-            Assert.Fail (
-                sprintf
-                    "Inconclusive: UpdateFee message support inconclusive because sending of htlc payments failed, fix this first: %s"
-                    (ex.ToString())
-            )
-            failwith "unreachable"
-
-        ElectrumServer.SetEstimatedFeeRate (feeRate * 4u)
-        let! newFeeRateOpt = clientWallet.ChannelStore.FeeUpdateRequired channelId
-        let newFeeRate = UnwrapOption newFeeRateOpt "Fee update should be required"
-        let! updateFeeRes =
-            (Node.Client clientWallet.NodeClient).UpdateFee channelId newFeeRate None
-        UnwrapResult updateFeeRes "UpdateFee failed"
-
-        try
-            let! sendPaymentRes = SendHtlcPaymentToGW channelId clientWallet "invoice-2.txt"
-            UnwrapResult sendPaymentRes "sending htlc failed."
-        with
-        | ex ->
-            Assert.Fail (
-                sprintf
-                    "Inconclusive: sending of htlc payments failed after UpdateFee message handling: %s"
-                    (ex.ToString())
-            )
-            failwith "unreachable"
-
-        do! ClientCloseChannel clientWallet bitcoind channelId
-
-        TearDown clientWallet bitcoind electrumServer lnd
-    }
-
-    [<Category "G2G_UpdateFeeMsg_Fundee">]
-    [<Test>]
-    member __.``can accept fee update after receiving htlc payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
-        let! serverWallet, channelId =
-            try
-                AcceptChannelFromGeewalletFunder ()
-            with
-            | ex ->
-                Assert.Fail (
-                    sprintf
-                        "Inconclusive: UpdateFee message support inconclusive because Channel accept failed, fix this first: %s"
-                        (ex.ToString())
-                )
-                failwith "unreachable"
-
-        let! feeRate = ElectrumServer.EstimateFeeRate()
-
-        try
-            do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice-1.txt" |> Async.Ignore
-        with
-        | ex ->
-            Assert.Fail (
-                sprintf
-                    "Inconclusive: UpdateFee message support inconclusive because receiving of htlc payments failed, fix this first: %s"
-                    (ex.ToString())
-            )
-            failwith "unreachable"
-
-        ElectrumServer.SetEstimatedFeeRate (feeRate * 4u)
-        let! acceptUpdateFeeRes =
-            Lightning.Network.AcceptUpdateFee serverWallet.NodeServer channelId
-        UnwrapResult acceptUpdateFeeRes "AcceptUpdateFee failed"
-
-        try
-            do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice-2.txt" |> Async.Ignore
-        with
-        | ex ->
-            Assert.Fail (
-                sprintf
-                    "Inconclusive: receiving of htlc payments failed after UpdateFee message handling: %s"
-                    (ex.ToString())
-            )
-            failwith "unreachable"
-
-        let! closeChannelRes = Lightning.Network.AcceptCloseChannel serverWallet.NodeServer channelId
-        match closeChannelRes with
-        | Ok _ -> ()
-        | Error err -> return failwith (SPrintF1 "failed to accept close channel: %A" err)
-
-        (serverWallet :> IDisposable).Dispose()
-    }
-
-
     [<Category "G2G_MutualCloseCpfp_Funder">]
     [<Test>]
     member __.``can CPFP on mutual close (funder)``() = Async.RunSynchronously <| async {
@@ -2621,7 +2618,7 @@ type LN() =
     member __.``can CPFP on mutual close  (fundee)``() = Async.RunSynchronously <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
-        do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+        do! ReceiveHtlcPaymentFromGW channelId serverWallet "invoice.txt" |> Async.Ignore
 
         let! closeChannelRes = Lightning.Network.AcceptCloseChannel serverWallet.NodeServer channelId
         match closeChannelRes with

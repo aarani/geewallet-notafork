@@ -24,9 +24,9 @@ type internal Operations =
     | OpenChannel             = 10
     | AcceptChannel           = 11
     | SendLightningPayment    = 12
-    | CreateInvoice           = 13
-    | ReceiveLightningEvent   = 14
-    | CloseChannel            = 15
+    | ReceiveLightningEvent   = 13
+    | CloseChannel            = 14
+    | CreateInvoice           = 15
 
 type WhichAccount =
     All of seq<IAccount> | MatchingWith of IAccount
@@ -689,6 +689,42 @@ module UserInteraction =
                 | None -> None
                 | Some amountOption ->
                     AskParticularAmountOption balance amountOption
+
+    let rec internal AskInvoiceAmount (account: IAccount): Option<TransferAmount> =
+        let rec AskParticularAmountOption (amountOption: AmountOption): Option<TransferAmount> =
+            match amountOption with
+            | AmountOption.AllBalance ->
+                failwith "All balance has been removed for this ask amount function"
+            | AmountOption.CertainCryptoAmount ->
+                let specificCryptoAmount = AskParticularAmount()
+                TransferAmount(specificCryptoAmount, specificCryptoAmount, account.Currency) |> Some
+            | AmountOption.ApproxEquivalentFiatAmount ->
+                match FiatValueEstimation.UsdValue account.Currency |> Async.RunSynchronously with
+                | NotFresh(NotAvailable) ->
+                    Presentation.Error "USD exchange rate unreachable (offline?), please choose a different option."
+                    AskInvoiceAmount account
+                | Fresh usdValue ->
+                    let maybeCryptoAmount = AskParticularFiatAmountWithRate account.Currency usdValue None
+                    match maybeCryptoAmount with
+                    | None -> None
+                    | Some cryptoAmount ->
+                        TransferAmount(cryptoAmount, cryptoAmount, account.Currency) |> Some
+                | NotFresh(Cached(usdValue,time)) ->
+                    let maybeCryptoAmount = AskParticularFiatAmountWithRate account.Currency usdValue (Some(time))
+                    match maybeCryptoAmount with
+                    | None -> None
+                    | Some cryptoAmount ->
+                        TransferAmount(cryptoAmount, cryptoAmount, account.Currency) |> Some
+
+        Console.WriteLine "There are various options to specify the amount of your invoice:"
+        Console.WriteLine "0. Cancel"
+        Console.WriteLine(sprintf "1. Exact amount in %A" account.Currency)
+        Console.WriteLine "2. Approximate amount in USD"
+
+        match AskAmountOption false with
+        | None -> None
+        | Some amountOption ->
+            AskParticularAmountOption  amountOption
 
     let rec AskLightningAmount (channelInfo: ChannelInfo): Option<TransferAmount> =
         option {

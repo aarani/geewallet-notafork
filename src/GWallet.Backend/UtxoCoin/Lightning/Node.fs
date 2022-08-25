@@ -324,8 +324,6 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
             | Ok activeChannelAfterPayment ->
                 (activeChannelAfterPayment :> IDisposable).Dispose()
                 return Ok ()
-
-
     }
 
     member internal self.InitiateCloseChannel (channelId: ChannelIdentifier) (nonionIntroductionPoint: Option<NOnionEndPoint>): Async<Result<unit, NodeInitiateCloseChannelError>> =
