@@ -700,7 +700,7 @@ module UserInteraction =
                 TransferAmount(specificCryptoAmount, specificCryptoAmount, account.Currency) |> Some
             | AmountOption.ApproxEquivalentFiatAmount ->
                 match FiatValueEstimation.UsdValue account.Currency |> Async.RunSynchronously with
-                | NotFresh(NotAvailable) ->
+                | NotFresh NotAvailable ->
                     Presentation.Error "USD exchange rate unreachable (offline?), please choose a different option."
                     AskInvoiceAmount account
                 | Fresh usdValue ->
@@ -710,7 +710,7 @@ module UserInteraction =
                     | Some cryptoAmount ->
                         TransferAmount(cryptoAmount, cryptoAmount, account.Currency) |> Some
                 | NotFresh(Cached(usdValue,time)) ->
-                    let maybeCryptoAmount = AskParticularFiatAmountWithRate account.Currency usdValue (Some(time))
+                    let maybeCryptoAmount = AskParticularFiatAmountWithRate account.Currency usdValue (Some time)
                     match maybeCryptoAmount with
                     | None -> None
                     | Some cryptoAmount ->
