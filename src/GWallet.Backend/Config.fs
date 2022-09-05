@@ -103,6 +103,8 @@ module Config =
 
     let ChannelReservePercentage = 1
 
+    let MinimumUtxoDepth = 2u
+
     let internal GetConfigDirForThisProgram() =
         let configDir =
             match runMode with

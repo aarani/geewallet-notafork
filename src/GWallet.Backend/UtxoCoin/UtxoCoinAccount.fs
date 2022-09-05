@@ -290,9 +290,26 @@ module Account =
                 else
                     newAcc,tail
 
+        let! currentBlockHeight = async {
+            let! blockHeightResponse =
+                Server.Query account.Currency
+                    (QuerySettings.Default ServerSelectionMode.Fast)
+                    (ElectrumClient.SubscribeHeaders ())
+                    None
+            return
+                uint32 blockHeightResponse.Height
+        }
+
         let job = GetElectrumScriptHashFromPublicAddress account.Currency account.PublicAddress
                   |> ElectrumClient.GetUnspentTransactionOutputs
-        let! utxos = Server.Query account.Currency (QuerySettings.Default ServerSelectionMode.Fast) job None
+        let! utxos =
+            async {
+                // This array contains mempool utxos and recently confirmed utxos (under 2 blocks)
+                let! allUtxos = Server.Query account.Currency (QuerySettings.Default ServerSelectionMode.Fast) job None
+                return
+                    allUtxos
+                    |> Seq.filter (fun utxo -> utxo.Height <> 0L && utxo.Height <= int64(currentBlockHeight - Config.MinimumUtxoDepth))
+            }
 
         if not (utxos.Any()) then
             failwith "No UTXOs found!"
