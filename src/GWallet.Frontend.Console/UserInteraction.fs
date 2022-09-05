@@ -243,7 +243,7 @@ module UserInteraction =
                 return! TryWithPasswordAsync func
         }
 
-    let private BalanceInUsdString balance maybeUsdValue =
+    let internal BalanceInUsdString balance maybeUsdValue =
         match maybeUsdValue with
         | NotFresh(NotAvailable) -> Presentation.ExchangeRateUnreachableMsg
         | Fresh(usdValue) ->

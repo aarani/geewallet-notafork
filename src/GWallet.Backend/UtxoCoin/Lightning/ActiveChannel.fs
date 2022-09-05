@@ -24,7 +24,7 @@ type HtlcSettleFailReason =
     | BadFinalPayload
 
 type HtlcSettleStatus =
-    | Success
+    | Success of Amount: decimal
     | Fail
     | NotSettled
 
@@ -1079,7 +1079,9 @@ and internal ActiveChannel =
                                     let! activeChannelAfterCommitReceivedRes = activeChannelAfterCommitSent.RecvCommit()
                                     match activeChannelAfterCommitReceivedRes with
                                     | Error err -> return Error <| RecvHtlcPaymentError.RecvCommit err
-                                    | Ok activeChannelAfterCommitReceived -> return Ok (activeChannelAfterCommitReceived, HtlcSettleStatus.Success)
+                                    | Ok activeChannelAfterCommitReceived ->
+                                        let amountInDecimal = updateAddHTLCMsg.Amount.ToMoney().ToDecimal(MoneyUnit.BTC)
+                                        return Ok (activeChannelAfterCommitReceived, HtlcSettleStatus.Success amountInDecimal)
                         else
                             return! self.FailHtlc updateAddHTLCMsg.HTLCId HtlcSettleFailReason.IncorrectPaymentAmount
                 | _ ->

@@ -530,19 +530,30 @@ module LayerTwo =
                             Console.WriteLine(sprintf "This node, connect to it: %s" (endPoint.ToString()))
                         | _ -> ()
 
+                        let currency = (account :> IAccount).Currency
                         Console.WriteLine "Waiting for funder to connect..."
                         let! receiveLightningEventRes = Lightning.Network.ReceiveLightningEvent nodeServer channelId true
                         match receiveLightningEventRes with
                         | Error nodeReceiveLightningEventError ->
-                            let currency = (account :> IAccount).Currency
                             Console.WriteLine(sprintf "Error receiving lightning event: %s" nodeReceiveLightningEventError.Message)
                             do! MaybeForceCloseChannel (Node.Server nodeServer) currency channelId nodeReceiveLightningEventError
                         | Ok msg ->
                             match msg with
                             | IncomingChannelEvent.HtlcPayment status ->
                                 match status with
-                                | HtlcSettleStatus.Success ->
-                                    Console.WriteLine "Payment received."
+                                | HtlcSettleStatus.Success amountInDecimal ->
+                                    let maybeUsdValue =
+                                        FiatValueEstimation.UsdValue currency
+                                        |> Async.RunSynchronously
+
+                                    Console.WriteLine "Payment received!"
+                                    Console.WriteLine (
+                                        sprintf
+                                            "Amount = %M %A (%s)"
+                                            amountInDecimal
+                                            currency
+                                            (UserInteraction.BalanceInUsdString amountInDecimal maybeUsdValue)
+                                    )
                                 | HtlcSettleStatus.Fail ->
                                     Console.WriteLine "Payment failed gracefully, funds has been returned to funder."
                                 | HtlcSettleStatus.NotSettled ->
