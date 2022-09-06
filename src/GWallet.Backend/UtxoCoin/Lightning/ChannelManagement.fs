@@ -278,7 +278,7 @@ type ChannelStore(account: NormalUtxoAccount) =
                             if reportedHeight = 0u then
                                 None
                             else
-                                Some (currentBlockHeight - reportedHeight)
+                                Some (currentBlockHeight - reportedHeight + 1u)
 
                         let! txString =
                             Server.Query
