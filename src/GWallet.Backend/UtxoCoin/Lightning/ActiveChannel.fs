@@ -698,7 +698,7 @@ and internal ActiveChannel =
             | _ -> return Error <| ExpectedCommitmentSigned channelMsg
     }
 
-    member private self.RecvHtlcFulfillOrFail(onionSharedSecrets: (Key * PubKey) list): Async<Result<ActiveChannel * bool, RecvFulfillOrFailError>> = async {
+    member private self.RecvHtlcFulfillOrFail (hops: Hop[]) (onionSharedSecrets: (Key * PubKey) list): Async<Result<ActiveChannel * bool, RecvFulfillOrFailError>> = async {
         let connectedChannel = self.ConnectedChannel
         let peerNode = connectedChannel.PeerNode
         let channel = connectedChannel.Channel
@@ -776,15 +776,27 @@ and internal ActiveChannel =
                     match activeChannelAfterCommitReceivedRes with
                     | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
                     | Ok activeChannelAfterCommitReceived ->
-                        let res = Sphinx.ErrorPacket.TryParse(theirFailMsg.Reason.Data, onionSharedSecrets)
-                        let strRep = SPrintF1 "%A" res
-                        Console.WriteLine("theirFailMsg:")
-                        Console.WriteLine(strRep)
-
                         let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
                         match activeChannelAfterCommitSentRes with
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
-                        | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, false)
+                        | Ok activeChannelAfterCommitSent ->
+                        
+                            let res = Sphinx.ErrorPacket.TryParse(theirFailMsg.Reason.Data, onionSharedSecrets)
+                            let strRep = SPrintF1 "%A" res
+                            Console.WriteLine("theirFailMsg:")
+                            Console.WriteLine(strRep)
+                            match res with
+                            | Ok errorPacket ->
+                                match errorPacket.FailureMsg.Code.Value with
+                                | OnionError.UNKNOWN_NEXT_PEER ->
+                                    hops
+                                    |> Array.find (fun hop -> hop.NodeId = errorPacket.OriginNode)
+                                    |> fun hop -> hop.ShortChannelId.Value
+                                    |> RapidGossipSyncer.BlacklistEdge
+                                | _ -> ()
+                            | _ -> ()
+                               
+                            return Ok (activeChannelAfterCommitSent, false)
             | :? UpdateFailMalformedHTLCMsg as theirFailMsg ->
                 let channelAfterFailMsgRes =
                     channel.Channel.ApplyUpdateFailMalformedHTLC theirFailMsg
@@ -945,10 +957,10 @@ and internal ActiveChannel =
             |> Array.toList
         System.Console.WriteLine("PubKeys:")
         for each in pubKeys do System.Console.WriteLine(each.ToString())
-        
+
         Sphinx.PacketAndSecrets.Create
             (
-                sessionKey, 
+                sessionKey,
                 pubKeys,
                 hopsData,
                 associatedData,
@@ -1031,7 +1043,7 @@ and internal ActiveChannel =
                     match activeChannelAfterCommitReceivedRes with
                     | Error err -> return Error <| SendHtlcPaymentError.RecvCommit err
                     | Ok activeChannelAfterCommitReceived when waitForResult ->
-                        let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail(onionPacket.SharedSecrets)
+                        let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail hops onionPacket.SharedSecrets
                         match (activeChannelAfterNewCommitRes) with
                         | Error err ->
                             return Error <| SendHtlcPaymentError.RecvFulfillOrFail err

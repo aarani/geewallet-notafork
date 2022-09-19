@@ -29,7 +29,7 @@ type internal RoutingGrpahEdge =
         member this.Target = this.Target
 
 
-type internal RoutingGraph = ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
+type internal RoutingGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>
 
 
 module private RoutingHeuristics =
@@ -169,7 +169,7 @@ module RapidGossipSyncer =
                                            lastSyncTimestamp: uint32,
                                            routingGraph: RoutingGraph) =
         
-        new() = RoutingGraphData(Set.empty, Map.empty, 0u, RoutingGraph(AdjacencyGraph()))
+        new() = RoutingGraphData(Set.empty, Map.empty, 0u, RoutingGraph())
 
         member self.LastSyncTimestamp = lastSyncTimestamp
 
@@ -177,7 +177,8 @@ module RapidGossipSyncer =
 
         member self.Update (newAnnouncements : seq<CompactAnnouncment>) 
                            (newUpdates: Map<ShortChannelId, ChannelUpdates>) 
-                           (syncTimestamp: uint32) : RoutingGraphData =
+                           (syncTimestamp: uint32)
+                           (blackListedEdges: List<ShortChannelId>): RoutingGraphData =
             let announcements = announcements |> Set.union (newAnnouncements |> Set.ofSeq)
             
             let updates =
@@ -192,29 +193,35 @@ module RapidGossipSyncer =
                         | None ->
                             tmpUpdates <- updates |> Map.add channelId newUpd )
                     tmpUpdates
+                |> Map.filter (fun channelId _ -> blackListedEdges |> List.contains channelId |> not)
 
             let baseGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>()
 
             for ann in announcements do
-                let updates = updates.[ann.ShortChannelId]
+                try              
+                    let updates = updates.[ann.ShortChannelId]
                 
-                let addEdge source target (upd : UnsignedChannelUpdateMsg) =
-                    let edge = { Source = source; Target = target; ShortChannelId = upd.ShortChannelId; Update = upd }
-                    baseGraph.AddVerticesAndEdge edge |> ignore
+                    let addEdge source target (upd : UnsignedChannelUpdateMsg) =
+                        let edge = { Source = source; Target = target; ShortChannelId = upd.ShortChannelId; Update = upd }
+                        baseGraph.AddVerticesAndEdge edge |> ignore
                 
-                updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
-                updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
+                    updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
+                    updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
+                with
+                | :? System.Collections.Generic.KeyNotFoundException ->
+                    ()
 
-            RoutingGraphData(announcements, updates, syncTimestamp, RoutingGraph(baseGraph))
+            RoutingGraphData(announcements, updates, syncTimestamp, baseGraph)
 
     let mutable internal routingState = RoutingGraphData()
+    let mutable internal blackListedEdges = List<ShortChannelId>.Empty
 
     let Sync () =
         async {
             use httpClient = new HttpClient()
             
             let! gossipData =
-                let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" routingState.LastSyncTimestamp
+                let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" 0u
                 httpClient.GetByteArrayAsync url
                 |> Async.AwaitTask
 
@@ -318,7 +325,7 @@ module RapidGossipSyncer =
                             defaultHtlcMaximumMSat
 
                     let structuredShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
-
+                    
                     let channelUpdate =
                         {
                             UnsignedChannelUpdateMsg.ShortChannelId = structuredShortChannelId
@@ -333,7 +340,7 @@ module RapidGossipSyncer =
                             HTLCMaximumMSat = htlcMaximumMSat |> LNMoney.MilliSatoshis |> Some
                         }
 
-                    let newUpdates =
+                    let newUpdates =                    
                         let oldValue =
                             match updates |> Map.tryFind structuredShortChannelId with
                             | Some(updates) -> updates
@@ -344,7 +351,7 @@ module RapidGossipSyncer =
 
             let updates = readUpdates updatesCount 0UL Map.empty
 
-            routingState <- routingState.Update announcements updates lastSeenTimestamp
+            routingState <- routingState.Update announcements updates lastSeenTimestamp blackListedEdges
 
             return ()
         }
@@ -361,6 +368,10 @@ module RapidGossipSyncer =
         match tryGetPath.Invoke targetNodeId with
         | true, path -> path
         | false, _ -> Seq.empty
+
+    let internal BlacklistEdge (shortChannelId: ShortChannelId) =
+        blackListedEdges <- shortChannelId::blackListedEdges
+        ()
 
     let DebugGetRoute (account: UtxoCoin.NormalUtxoAccount) (nodeAddress: string) (numSatoshis: decimal) =
         let paymentAmount = LNMoney.Satoshis numSatoshis
