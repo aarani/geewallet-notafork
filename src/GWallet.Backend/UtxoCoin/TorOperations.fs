@@ -3,38 +3,100 @@
 open System
 open System.Net
 open System.Text.RegularExpressions
+open System.Diagnostics
 
 open NOnion
 open NOnion.Directory
 open NOnion.Services
+open NOnion.Network
 
 open GWallet.Backend
+open System.Net.Sockets
 
 
 module internal TorOperations =
-    let GetRandomTorFallbackDirectoryEndPoint() =
+    let GetRandomTorFallbackDirectoryServer() =
         match Caching.Instance.GetServers
             (ServerType.ProtocolServer ServerProtocol.Tor)
             |> Shuffler.Unsort
             |> Seq.tryHead with
-        | Some server ->
+        | Some server -> server
+        | None ->
+            failwith "Couldn't find any Tor server"
+
+    let internal GetEndpointForServer(server: ServerDetails): IPEndPoint =
+        let endpoint = 
             match server.ServerInfo.ConnectionType.Protocol with
             | Protocol.Tcp port ->
                 IPEndPoint(IPAddress.Parse server.ServerInfo.NetworkPath, int32 port)
             | _ -> failwith "Invalid Tor directory. Tor directories must have an IP and port."
-        | None ->
-            failwith "Couldn't find any Tor server"
+
+        endpoint
+    let NewClientWithMeasurment(server: ServerDetails): Async<Option<TorGuard>> =
+        let endpoint = GetEndpointForServer server
+        async {
+            let stopwatch = Stopwatch()
+            stopwatch.Start()
+
+            try
+                let! torGuard = TorGuard.NewClient endpoint
+                stopwatch.Stop()
+                let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = None }
+                Caching.Instance.SaveServerLastStat 
+                    (fun srv -> srv = server)
+                    historyFact
+                return Some torGuard
+            with
+            // TODO: remove thix section after NOnion is fixed.
+            | :? System.Security.Authentication.AuthenticationException as ex ->
+                stopwatch.Stop()
+                let exInfo =
+                    {
+                        TypeFullName = ex.GetType().FullName
+                        Message = ex.Message
+                    }
+                let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = Some(exInfo) }
+                Caching.Instance.SaveServerLastStat 
+                    (fun srv -> srv = server)
+                    historyFact
+                return None
+            | ex ->
+                stopwatch.Stop()
+                let exInfo =
+                    {
+                        TypeFullName = ex.GetType().FullName
+                        Message = ex.Message
+                    }
+                let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = Some(exInfo) }
+                Caching.Instance.SaveServerLastStat 
+                    (fun srv -> srv = server)
+                    historyFact
+                return raise <| FSharpUtil.ReRaise ex 
+        }
+
+    let GetTorGuardForServer(server:ServerDetails): Async<Option<TorGuard>> = 
+        async {
+            return! FSharpUtil.Retry<Option<TorGuard>, NOnionException, SocketException>
+                (fun _ -> 
+                    NewClientWithMeasurment server
+                )
+                Config.TOR_CONNECTION_RETRY_COUNT
+        }
 
     let internal GetTorDirectory(): Async<TorDirectory> =
         async {
-            return! FSharpUtil.Retry<TorDirectory, NOnionException>
-                (fun _ -> TorDirectory.Bootstrap (GetRandomTorFallbackDirectoryEndPoint()))
+            return! FSharpUtil.Retry<TorDirectory, NOnionException, SocketException>
+                (fun _ -> 
+                    let randomServer = GetRandomTorFallbackDirectoryServer()
+                    let endpoint = GetEndpointForServer randomServer
+                    TorDirectory.Bootstrap endpoint
+                )
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
 
     let internal StartTorServiceHost directory =
         async {
-            return! FSharpUtil.Retry<TorServiceHost, NOnionException>
+            return! FSharpUtil.Retry<TorServiceHost, NOnionException, SocketException>
                 (fun _ -> async { 
                     let torHost = TorServiceHost(directory, Config.TOR_CONNECTION_RETRY_COUNT) 
                     do! torHost.Start()
@@ -45,7 +107,7 @@ module internal TorOperations =
 
     let internal TorConnect directory introductionPoint =
         async {
-            return! FSharpUtil.Retry<TorServiceClient, NOnionException>
+            return! FSharpUtil.Retry<TorServiceClient, NOnionException, SocketException>
                 (fun _ -> TorServiceClient.Connect directory introductionPoint)
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
