@@ -36,11 +36,16 @@ module internal TorOperations =
             let masterPrivateKey = kpGen.GenerateKeyPair().Private :?> Ed25519PrivateKeyParameters
             File.WriteAllBytes(serviceKeyPath, masterPrivateKey.GetEncoded())
             masterPrivateKey
-
-    let GetRandomTorFallbackDirectoryEndPoint() =
+    
+    let GetFastestTorFallbackDirectoryServer() =
         match Caching.Instance.GetServers
             (ServerType.ProtocolServer ServerProtocol.Tor)
-            |> Shuffler.Unsort
+            |> Seq.sortBy
+                (fun server -> 
+                    match server.CommunicationHistory with
+                    | Some(historyInfo, _) when historyInfo.Status = Status.Success -> 
+                        historyInfo.TimeSpan.TotalMilliseconds
+                    | _ -> infinity )
             |> Seq.tryHead with
         | Some server -> server
         | None ->
@@ -70,19 +75,6 @@ module internal TorOperations =
                     historyFact
                 return Some torGuard
             with
-            // TODO: remove thix section after NOnion is fixed.
-            | :? System.Security.Authentication.AuthenticationException as ex ->
-                stopwatch.Stop()
-                let exInfo =
-                    {
-                        TypeFullName = ex.GetType().FullName
-                        Message = ex.Message
-                    }
-                let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = Some(exInfo) }
-                Caching.Instance.SaveServerLastStat 
-                    (fun srv -> srv = server)
-                    historyFact
-                return None
             | ex ->
                 stopwatch.Stop()
                 let exInfo =
@@ -94,7 +86,15 @@ module internal TorOperations =
                 Caching.Instance.SaveServerLastStat 
                     (fun srv -> srv = server)
                     historyFact
-                return raise <| FSharpUtil.ReRaise ex 
+                match FSharpUtil.FindException<NOnion.GuardConnectionFailedException> ex with
+                | Some _guardConnFailedEx ->
+                    return None
+                | None ->
+                    match FSharpUtil.FindException<NOnion.TimeoutErrorException> ex with
+                    | Some _timeoutEx ->
+                        return None
+                    | None ->
+                        return raise <| FSharpUtil.ReRaise ex 
         }
 
     let GetTorGuardForServer(server:ServerDetails): Async<Option<TorGuard>> = 
@@ -110,9 +110,12 @@ module internal TorOperations =
         async {
             return! FSharpUtil.Retry<TorDirectory, NOnionException, SocketException>
                 (fun _ -> 
-                    let randomServer = GetRandomTorFallbackDirectoryServer()
-                    let endpoint = GetEndpointForServer randomServer
-                    TorDirectory.Bootstrap endpoint
+                    async {
+                        let server = GetFastestTorFallbackDirectoryServer()
+                        match! NewClientWithMeasurment server with
+                        | Some guard -> return! TorDirectory.BootstrapWithGuard guard (Config.GetCacheDir())
+                        | None -> return raise (NOnionException "NewClientWithMeasurment returned None")
+                    }
                 )
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
@@ -128,7 +131,7 @@ module internal TorOperations =
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
 
-    let internal TorConnect directory url =
+    let internal TorConnect directory introductionPoint =
         async {
             return! FSharpUtil.Retry<TorServiceClient, NOnionException, SocketException>
                 (fun _ -> TorServiceClient.Connect directory introductionPoint)
