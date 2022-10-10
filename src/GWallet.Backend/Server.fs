@@ -191,7 +191,7 @@ module ServerRegistry =
         } |> Map.ofSeq
 
     let private BitcoinRegTestServers =
-        let ipv6Localhost = "::1"
+        let ipv6Localhost = "127.0.0.1"
         seq [
             {
                 ServerInfo =
