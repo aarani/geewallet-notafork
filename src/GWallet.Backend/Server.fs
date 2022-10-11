@@ -191,12 +191,12 @@ module ServerRegistry =
         } |> Map.ofSeq
 
     let private BitcoinRegTestServers =
-        let ipv6Localhost = "127.0.0.1"
+        let ipv4Localhost = "127.0.0.1"
         seq [
             {
                 ServerInfo =
                     {
-                        NetworkPath = ipv6Localhost
+                        NetworkPath = ipv4Localhost
                         ConnectionType =
                             {
                                 Encrypted = false
