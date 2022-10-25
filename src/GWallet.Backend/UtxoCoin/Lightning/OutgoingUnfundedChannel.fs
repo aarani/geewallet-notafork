@@ -66,7 +66,7 @@ type internal OutgoingUnfundedChannel =
         let channelIndex =
             let random = Org.BouncyCastle.Security.SecureRandom() :> Random
             random.Next(1, Int32.MaxValue / 2)
-        let! channelOptions = MonoHopUnidirectionalChannel.DefaultChannelOptions currency
+        let! channelOptions = UnidirectionalChannel.DefaultChannelOptions currency
         let! feeEstimator = FeeEstimator.Create currency
         let network = UtxoCoin.Account.GetNetwork currency
         let defaultFinalScriptPubKey = ScriptManager.CreatePayoutScript account

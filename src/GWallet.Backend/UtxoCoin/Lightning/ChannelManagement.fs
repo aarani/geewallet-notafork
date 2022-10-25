@@ -375,7 +375,7 @@ type ChannelStore(account: NormalUtxoAccount) =
             }
             let mismatchRatio = agreedUponFeeRate.MismatchRatio actualFeeRate
             let maxFeeRateMismatchRatio =
-                MonoHopUnidirectionalChannel.DefaultMaxFeeRateMismatchRatio
+                UnidirectionalChannel.DefaultMaxFeeRateMismatchRatio
             if mismatchRatio <= maxFeeRateMismatchRatio then
                 return None
             else

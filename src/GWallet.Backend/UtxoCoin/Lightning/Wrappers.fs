@@ -87,7 +87,7 @@ type PaymentInvoice =
                 UnwrapResult (PaymentRequest.Parse invoiceStr) "Invalid invoice"
         }
 
-type MonoHopUnidirectionalChannel =
+type UnidirectionalChannel =
     internal {
         Channel: Channel
     }
@@ -102,7 +102,7 @@ type MonoHopUnidirectionalChannel =
                 {
                     FeeProportionalMillionths = 100u
                     MaxFeeRateMismatchRatio =
-                        MonoHopUnidirectionalChannel.DefaultMaxFeeRateMismatchRatio
+                        UnidirectionalChannel.DefaultMaxFeeRateMismatchRatio
                     MaxClosingNegotiationIterations = 10
                     FeeEstimator = feeEstimator
                 }
@@ -115,9 +115,9 @@ type MonoHopUnidirectionalChannel =
                                   (remoteNextCommitInfo: Option<RemoteNextCommitInfo>)
                                   (negotiatingState: NegotiatingState)
                                   (commitments: Commitments)
-                                      : Async<MonoHopUnidirectionalChannel> = async {
+                                      : Async<UnidirectionalChannel> = async {
         let currency = (account :> IAccount).Currency
-        let! channelOptions = MonoHopUnidirectionalChannel.DefaultChannelOptions currency
+        let! channelOptions = UnidirectionalChannel.DefaultChannelOptions currency
         let channelPrivKeys = nodeMasterPrivKey.ChannelPrivKeys channelIndex
         let channel = {
             SavedChannelState = savedChannelState

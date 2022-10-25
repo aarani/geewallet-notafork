@@ -71,7 +71,7 @@ type internal ReconnectError =
 type internal ConnectedChannel =
     {
         PeerNode: PeerNode
-        Channel: MonoHopUnidirectionalChannel
+        Channel: UnidirectionalChannel
         Account: NormalUtxoAccount
         MinimumDepth: BlockHeightOffset32
         ChannelIndex: int
@@ -84,11 +84,11 @@ type internal ConnectedChannel =
     static member private LoadChannel (channelStore: ChannelStore)
                                       (nodeMasterPrivKey: NodeMasterPrivKey)
                                       (channelId: ChannelIdentifier)
-                                          : Async<SerializedChannel * MonoHopUnidirectionalChannel> = async {
+                                          : Async<SerializedChannel * UnidirectionalChannel> = async {
         let serializedChannel = channelStore.LoadChannel channelId
         Infrastructure.LogDebug <| SPrintF1 "loading channel for %s" (channelId.ToString())
         let! channel =
-            MonoHopUnidirectionalChannel.Create
+            UnidirectionalChannel.Create
                 channelStore.Account
                 nodeMasterPrivKey
                 serializedChannel.ChannelIndex
@@ -100,8 +100,8 @@ type internal ConnectedChannel =
     }
 
     static member private Reestablish (peerNode: PeerNode)
-                                      (channel: MonoHopUnidirectionalChannel)
-                                          : Async<Result<PeerNode * MonoHopUnidirectionalChannel, ReestablishError>> = async {
+                                      (channel: UnidirectionalChannel)
+                                          : Async<Result<PeerNode * UnidirectionalChannel, ReestablishError>> = async {
         let channelId = channel.ChannelId
         let ourReestablishMsg = channel.Channel.CreateChannelReestablish()
         Infrastructure.LogDebug <| SPrintF1 "sending reestablish for %s" (channelId.ToString())

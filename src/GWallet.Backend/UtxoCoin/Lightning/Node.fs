@@ -174,7 +174,6 @@ type IChannelToBeOpened =
 
 type IncomingChannelEvent =
     | HtlcPayment of status: HtlcSettleStatus
-    | MonoHopUnidirectionalPayment
     | Shutdown
 
 type PendingChannel internal (outgoingUnfundedChannel: OutgoingUnfundedChannel) =

@@ -543,9 +543,6 @@ module LayerTwo =
                                     Console.WriteLine "Payment failed gracefully, funds has been returned to funder."
                                 | HtlcSettleStatus.NotSettled ->
                                     failwith "This should not happen beacuse ReceiveLightningEvent's settleHTLCImmediately is true in Frontend"
-
-                            | IncomingChannelEvent.MonoHopUnidirectionalPayment ->
-                                Console.WriteLine "Payment received."
                             | IncomingChannelEvent.Shutdown ->
                                 Console.WriteLine "Channel closed."
                     }
