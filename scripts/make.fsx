@@ -147,12 +147,13 @@ let PrintNugetVersion () =
             failwith "nuget process' output contained errors ^"
 
 let BuildSolution
-    (buildTool: string)
+    (buildToolAndBuildArg: string*string)
     (solutionFileName: string)
     (binaryConfig: BinaryConfig)
     (maybeConstant: Option<string>)
     (extraOptions: string)
     =
+    let buildTool,buildArg = buildToolAndBuildArg
     let configOption = sprintf "/p:Configuration=%s" (binaryConfig.ToString())
     let defineConstantsFromBuildConfig =
         match buildConfigContents |> Map.tryFind "DefineConstants" with
@@ -169,7 +170,8 @@ let BuildSolution
             sprintf "%s;DefineConstants=%s" configOption (String.Join(";", allDefineConstants))
         else
             configOption
-    let buildArgs = sprintf "%s %s %s"
+    let buildArgs = sprintf "%s %s %s %s"
+                            buildArg
                             solutionFileName
                             configOptions
                             extraOptions
@@ -183,15 +185,40 @@ let BuildSolution
     | _ -> ()
 
 let JustBuild binaryConfig maybeConstant =
-    let buildTool = Map.tryFind "BuildTool" buildConfigContents
-    if buildTool.IsNone then
-        failwith "A BuildTool should have been chosen by the configure script, please report this bug"
+    let maybeBuildTool = Map.tryFind "BuildTool" buildConfigContents
+    let mainSolution = "gwallet.sln"
+    let buildTool,buildArg,solutionFileName =
+        match maybeBuildTool with
+        | None ->
+            failwith "A BuildTool should have been chosen by the configure script, please report this bug"
+        | Some "dotnet" ->
+#if LEGACY_FRAMEWORK
+            failwith "'dotnet' shouldn't be the build tool when using legacy framework, please report this bug"
+#endif
+            "dotnet", "build", mainSolution
+        | Some otherBuildTool ->
+#if LEGACY_FRAMEWORK
+            let nugetConfig =
+                Path.Combine(
+                    FsxHelper.RootDir.FullName,
+                    "NuGet.config")
+                |> FileInfo
+            let legacyNugetConfig =
+                Path.Combine(
+                    FsxHelper.RootDir.FullName,
+                    "NuGet-legacy.config")
+                |> FileInfo
+
+            File.Copy(legacyNugetConfig.FullName, nugetConfig.FullName, true)
+            otherBuildTool, String.Empty, "gwallet-legacy.sln"
+#else
+            otherBuildTool, String.Empty, mainSolution
+#endif
 
     Console.WriteLine (sprintf "Building in %s mode..." (binaryConfig.ToString()))
     BuildSolution
-        buildTool.Value
-        // no need to pass solution file name because there's only 1 solution:
-        String.Empty
+        (buildTool, buildArg)
+        solutionFileName
         binaryConfig
         maybeConstant
         String.Empty
@@ -401,6 +428,7 @@ match maybeTarget with
 
 | Some "sanitycheck" ->
 
+#if LEGACY_FRAMEWORK
     if not FsxHelper.NugetExe.Exists then
         MakeAll None |> ignore
 
@@ -411,15 +439,27 @@ match maybeTarget with
             microsoftBuildLibVersion (FsxHelper.NugetScriptsPackagesDir().FullName)
     RunNugetCommand installMicrosoftBuildLibRunnerNugetCommand Echo.All true
         |> ignore
+#endif
 
     let sanityCheckScript = Path.Combine(FsxHelper.ScriptsDir.FullName, "sanitycheck.fsx")
-    Process.Execute(
-        {
-            Command = FsxHelper.FsxRunnerBin
-            Arguments = sprintf "%s %s" FsxHelper.FsxRunnerArg sanityCheckScript
-        },
-        Echo.All
-    ).UnwrapDefault() |> ignore<string>
+    let sanityCheckProc =
+        Process.Execute(
+            {
+                Command = FsxHelper.FsxRunnerBin
+                Arguments = sprintf "%s %s" FsxHelper.FsxRunnerArg sanityCheckScript
+            },
+            Echo.All
+        )
+    match sanityCheckProc.Result with
+    | ProcessResultState.Error (_exitCode, _output) ->
+        Console.WriteLine()
+        Console.Out.Flush()
+        Console.Error.Flush()
+        failwith "Unexpected 'sanitycheck.fsx' error ^"
+    | ProcessResultState.WarningsOrAmbiguous output ->
+        ()
+    | ProcessResultState.Success output ->
+        ()
 
 | Some(someOtherTarget) ->
     Console.Error.WriteLine("Unrecognized target: " + someOtherTarget)
