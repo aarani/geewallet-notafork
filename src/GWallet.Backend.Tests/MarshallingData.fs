@@ -56,6 +56,9 @@ module MarshallingData =
     let RealExceptionExampleInJson =
         ReadEmbeddedResource "realException.json"
 
+    let RealExceptionLegacyExampleInJson =
+        ReadEmbeddedResource "realException_legacy.json"
+
     let InnerExceptionExampleInJson =
         ReadEmbeddedResource "innerException.json"
 
@@ -65,8 +68,14 @@ module MarshallingData =
     let CustomFSharpExceptionExampleInJson =
         ReadEmbeddedResource "customFSharpException.json"
 
+    let CustomFSharpExceptionLegacyExampleInJson =
+        ReadEmbeddedResource "customFSharpException_legacy.json"
+
     let FullExceptionExampleInJson =
         ReadEmbeddedResource "fullException.json"
+
+    let FullExceptionLegacyExampleInJson =
+        ReadEmbeddedResource "fullException_legacy.json"
 
 
     let SerializedExceptionsAreSame actualJsonString expectedJsonString =
@@ -85,17 +94,14 @@ module MarshallingData =
                 let stackTraceJToken = jsonEx.SelectToken stackTracePath
                 Assert.That(stackTraceJToken, Is.Not.Null, sprintf "Path %s not found in %s" stackTracePath (jsonEx.ToString()))
                 let initialStackTraceJToken = stackTraceJToken.ToString()
-                if initialStackTraceJToken.Length > 0 then
+                if initialStackTraceJToken.Length > 0 && isUnix then
                     Assert.That(initialStackTraceJToken, Is.StringContaining stackTraceFragment,
                                 sprintf "comparing actual '%s' with expected '%s'" actualJsonString expectedJsonString)
                     let endOfStackTrace = initialStackTraceJToken.Substring(initialStackTraceJToken.IndexOf stackTraceFragment)
                     let tweakedEndOfStackTrace =
-                        if isUnix then
-                            endOfStackTrace
-                                .Replace(":line 42", ":41 ")
-                                .Replace(":line 65", ":64 ")
-                        else
-                            endOfStackTrace
+                        endOfStackTrace
+                            .Replace(":line 42", ":41 ")
+                            .Replace(":line 65", ":64 ")
                     stackTraceJToken.Replace (tweakedEndOfStackTrace |> JToken.op_Implicit)
 
                 let binaryFormToken = jsonEx.SelectToken fullBinaryFormPath

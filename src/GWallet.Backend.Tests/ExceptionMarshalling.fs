@@ -98,7 +98,10 @@ type ExceptionMarshalling () =
         let json = SerializeRealException ()
         Assert.That(json, Is.Not.Null)
         Assert.That(json, Is.Not.Empty)
-        Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.RealExceptionExampleInJson)
+        if Config.IsWindowsPlatform () then
+            Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.RealExceptionExampleInJson)
+        else
+            Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.RealExceptionLegacyExampleInJson)
 
     [<Test>]
     member __.``can deserialize real exceptions``() =
@@ -183,7 +186,10 @@ type ExceptionMarshalling () =
         let json = SerializeCustomFSharpException ()
         Assert.That(json, Is.Not.Null)
         Assert.That(json, Is.Not.Empty)
-        Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.CustomFSharpExceptionExampleInJson)
+        if Config.IsWindowsPlatform () then
+            Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.CustomFSharpExceptionExampleInJson)
+        else
+            Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.CustomFSharpExceptionLegacyExampleInJson)
 
     [<Test>]
     member __.``can deserialize F# custom exceptions``() =
@@ -212,7 +218,10 @@ type ExceptionMarshalling () =
         Assert.That(json, Is.Not.Null)
         Assert.That(json, Is.Not.Empty)
 
-        Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.FullExceptionExampleInJson)
+        if Config.IsWindowsPlatform () then
+            Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.FullExceptionExampleInJson)
+        else
+            Assert.That(MarshallingData.SerializedExceptionsAreSame json MarshallingData.FullExceptionLegacyExampleInJson)
 
     [<Test>]
     member __.``can deserialize full exceptions (all previous features combined)``() =
