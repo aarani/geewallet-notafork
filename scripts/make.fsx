@@ -329,26 +329,35 @@ match maybeTarget with
     Console.WriteLine "Running tests..."
     Console.WriteLine ()
 
-#if LEGACY_FRAMEWORK
-    // so that we get file names in stack traces
-    Environment.SetEnvironmentVariable("MONO_ENV_OPTIONS", "--debug")
-
-    let testAssemblyName = "GWallet.Backend.Tests"
-    let testAssembly =
+    let testProjectName = "GWallet.Backend.Tests"
+#if !LEGACY_FRAMEWORK
+    let testTarget =
         Path.Combine (
             FsxHelper.RootDir.FullName,
             "src",
-            testAssemblyName,
-            "bin",
-            testAssemblyName + ".dll"
+            testProjectName,
+            testProjectName + ".fsproj"
         ) |> FileInfo
-    if not testAssembly.Exists then
-        failwithf "File not found: %s" testAssembly.FullName
+#else
+    // so that we get file names in stack traces
+    Environment.SetEnvironmentVariable("MONO_ENV_OPTIONS", "--debug")
+
+    let testTarget =
+        Path.Combine (
+            FsxHelper.RootDir.FullName,
+            "src",
+            testProjectName,
+            "bin",
+            testProjectName + ".dll"
+        ) |> FileInfo
 #endif
+
+    if not testTarget.Exists then
+        failwithf "File not found: %s" testTarget.FullName
 
     let runnerCommand =
 #if !LEGACY_FRAMEWORK
-        { Command = "dotnet"; Arguments = "test" }
+        { Command = "dotnet"; Arguments = "test " + testTarget.FullName }
 #else
         match Misc.GuessPlatform() with
         | Misc.Platform.Linux ->
@@ -377,8 +386,7 @@ match maybeTarget with
             }
 #endif
 
-    let unitTestsRun = Process.Execute(runnerCommand,
-                                   Echo.All)
+    let unitTestsRun = Process.Execute(runnerCommand, Echo.All)
     match unitTestsRun.Result with
     | Error _ ->
         Console.WriteLine()
