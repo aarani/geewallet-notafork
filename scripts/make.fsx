@@ -329,10 +329,9 @@ match maybeTarget with
     Console.WriteLine "Running tests..."
     Console.WriteLine ()
 
-#if !LEGACY_FRAMEWORK
+#if LEGACY_FRAMEWORK
     // so that we get file names in stack traces
     Environment.SetEnvironmentVariable("MONO_ENV_OPTIONS", "--debug")
-#endif
 
     let testAssemblyName = "GWallet.Backend.Tests"
     let testAssembly =
@@ -341,16 +340,16 @@ match maybeTarget with
             "src",
             testAssemblyName,
             "bin",
-#if !LEGACY_FRAMEWORK
-            "Debug",
-            "net6.0",
-#endif
             testAssemblyName + ".dll"
         ) |> FileInfo
     if not testAssembly.Exists then
         failwithf "File not found: %s" testAssembly.FullName
+#endif
 
     let runnerCommand =
+#if !LEGACY_FRAMEWORK
+        { Command = "dotnet"; Arguments = "test" }
+#else
         match Misc.GuessPlatform() with
         | Misc.Platform.Linux ->
             let nunitCommand = "nunit-console"
@@ -376,10 +375,11 @@ match maybeTarget with
                                        "nunit-console.exe")
                 Arguments = testAssembly.FullName
             }
+#endif
 
-    let nunitRun = Process.Execute(runnerCommand,
+    let unitTestsRun = Process.Execute(runnerCommand,
                                    Echo.All)
-    match nunitRun.Result with
+    match unitTestsRun.Result with
     | Error _ ->
         Console.WriteLine()
         Console.Error.WriteLine "Tests failed"
