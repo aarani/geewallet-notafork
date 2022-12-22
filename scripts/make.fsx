@@ -382,7 +382,7 @@ match maybeTarget with
                                        sprintf "NUnit.Runners.%s" nunitVersion,
                                        "tools",
                                        "nunit-console.exe")
-                Arguments = testAssembly.FullName
+                Arguments = testTarget.FullName
             }
 #endif
 
