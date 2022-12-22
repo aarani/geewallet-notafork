@@ -329,8 +329,10 @@ match maybeTarget with
     Console.WriteLine "Running tests..."
     Console.WriteLine ()
 
+#if !LEGACY_FRAMEWORK
     // so that we get file names in stack traces
     Environment.SetEnvironmentVariable("MONO_ENV_OPTIONS", "--debug")
+#endif
 
     let testAssemblyName = "GWallet.Backend.Tests"
     let testAssembly =
@@ -339,6 +341,10 @@ match maybeTarget with
             "src",
             testAssemblyName,
             "bin",
+#if !LEGACY_FRAMEWORK
+            "Debug",
+            "net6.0",
+#endif
             testAssemblyName + ".dll"
         ) |> FileInfo
     if not testAssembly.Exists then
