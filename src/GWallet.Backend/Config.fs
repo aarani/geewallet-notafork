@@ -153,9 +153,19 @@ module Config =
         RemoveAccount account
 
     let ExtractEmbeddedResourceFileContents resourceName =
-        let assembly = Assembly.GetCallingAssembly()
-        use stream = assembly.GetManifestResourceStream resourceName
-        if (stream = null) then
+        let assembly = Assembly.GetExecutingAssembly()
+
+        let fullNameOpt =
+            assembly.GetManifestResourceNames()
+            |> Seq.filter (fun resourceName -> resourceName.Contains "servers.json")
+            |> Seq.tryExactlyOne
+
+        match fullNameOpt with
+        | Some fullName ->
+            use stream = assembly.GetManifestResourceStream fullName
+            if (stream = null) then
+                failwith <| SPrintF1 "Embedded resource %s not found" resourceName
+            use reader = new StreamReader(stream)
+            reader.ReadToEnd()
+        | None ->
             failwith <| SPrintF1 "Embedded resource %s not found" resourceName
-        use reader = new StreamReader(stream)
-        reader.ReadToEnd()
