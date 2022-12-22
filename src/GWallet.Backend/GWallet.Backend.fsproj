@@ -43,6 +43,7 @@
     <Compile Include="Account.fs" />
     <Compile Include="Formatting.fs" />
     <Compile Include="ServerManager.fs" />
+    <EmbeddedResource Include="servers.json" />
   </ItemGroup>
 
   <ItemGroup>
