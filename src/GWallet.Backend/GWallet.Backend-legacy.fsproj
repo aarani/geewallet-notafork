@@ -39,7 +39,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <DocumentationFile>bin\Release\GWallet.Backend.XML</DocumentationFile>
   </PropertyGroup>
-  <Import Project="..\CommonBuildProps.proj" />
+  <Import Project="..\CommonBuildProps-legacy.proj" />
   <Import Condition="'$(FSharpTargetsPath)' != ''" Project="$(FSharpTargetsPath)" />
   <Target Name="BeforeBuild">
     <Message Condition="'$(FSharpTargetsPath)' == ''" Importance="High" Text="F# SDK path was not found!" />
