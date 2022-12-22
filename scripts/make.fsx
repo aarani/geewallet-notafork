@@ -235,7 +235,11 @@ let MakeCheckCommand (commandName: string) =
         Environment.Exit 1
 
 let GetPathToFrontendBinariesDir (binaryConfig: BinaryConfig) =
+#if LEGACY_FRAMEWORK
     Path.Combine (FsxHelper.RootDir.FullName, "src", DEFAULT_FRONTEND, "bin", binaryConfig.ToString())
+#else
+    Path.Combine (FsxHelper.RootDir.FullName, "src", DEFAULT_FRONTEND, "bin", binaryConfig.ToString(), "net6.0")
+#endif
 
 let GetPathToBackend () =
     Path.Combine (FsxHelper.RootDir.FullName, "src", BACKEND)
@@ -246,18 +250,31 @@ let MakeAll (maybeConstant: Option<string>) =
     buildConfig
 
 let RunFrontend (buildConfig: BinaryConfig) (maybeArgs: Option<string>) =
-    let pathToFrontend = Path.Combine(GetPathToFrontendBinariesDir buildConfig, DEFAULT_FRONTEND + ".exe") |> FileInfo
+    let frontEndExtension =
+#if LEGACY_FRAMEWORK
+        ".exe"
+#else
+        ".dll"
+#endif
 
-    let fileName, finalArgs =
-        match maybeArgs with
-        | None | Some "" -> pathToFrontend,String.Empty
-        | Some args -> pathToFrontend,args
+    let pathToFrontend =
+        Path.Combine(GetPathToFrontendBinariesDir buildConfig, DEFAULT_FRONTEND + frontEndExtension) |> FileInfo
 
     match Misc.GuessPlatform() with
     | Misc.Platform.Windows -> ()
     | _ -> Unix.ChangeMode(pathToFrontend, "+x", false)
 
-    let startInfo = ProcessStartInfo(FileName = fileName.FullName, Arguments = finalArgs, UseShellExecute = false)
+    let fileName, finalArgs =
+        match maybeArgs with
+#if LEGACY_FRAMEWORK
+        | None | Some "" -> pathToFrontend.FullName, String.Empty
+        | Some args -> pathToFrontend.FullName, args
+#else
+        | None | Some "" -> "dotnet", pathToFrontend.FullName
+        | Some args -> "dotnet", (sprintf "%s %s" pathToFrontend.FullName args)
+#endif
+
+    let startInfo = ProcessStartInfo(FileName = fileName, Arguments = finalArgs, UseShellExecute = false)
     startInfo.EnvironmentVariables.["MONO_ENV_OPTIONS"] <- "--debug"
 
     let proc = Process.Start startInfo
