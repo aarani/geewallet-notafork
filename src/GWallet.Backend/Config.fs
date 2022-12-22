@@ -153,7 +153,7 @@ module Config =
         RemoveAccount account
 
     let ExtractEmbeddedResourceFileContents resourceName =
-        let assembly = Assembly.GetExecutingAssembly()
+        let assembly = Assembly.GetCallingAssembly()
         use stream = assembly.GetManifestResourceStream resourceName
         if (stream = null) then
             failwith <| SPrintF1 "Embedded resource %s not found" resourceName

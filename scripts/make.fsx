@@ -260,9 +260,11 @@ let RunFrontend (buildConfig: BinaryConfig) (maybeArgs: Option<string>) =
     let pathToFrontend =
         Path.Combine(GetPathToFrontendBinariesDir buildConfig, DEFAULT_FRONTEND + frontEndExtension) |> FileInfo
 
+#if LEGACY_FRAMEWORK
     match Misc.GuessPlatform() with
     | Misc.Platform.Windows -> ()
     | _ -> Unix.ChangeMode(pathToFrontend, "+x", false)
+#endif
 
     let fileName, finalArgs =
         match maybeArgs with
