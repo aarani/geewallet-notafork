@@ -364,7 +364,7 @@ match maybeTarget with
             let nunitCommand = "nunit-console"
             MakeCheckCommand nunitCommand
 
-            { Command = nunitCommand; Arguments = testAssembly.FullName }
+            { Command = nunitCommand; Arguments = testTarget.FullName }
         | _ ->
             if not FsxHelper.NugetExe.Exists then
                 MakeAll None |> ignore
