@@ -83,6 +83,12 @@ module ElectrumClient =
         return blockchainTransactionResult.Result
     }
 
+    let GetBlockchainTransactionIdFromPos (height: uint) (txPos: uint) (stratumServer: Async<StratumClient>) = async {
+        let! stratumClient = stratumServer
+        let! blockchainTransactionResult = stratumClient.BlockchainTransactionIdFromPos height txPos
+        return blockchainTransactionResult.Result
+    }
+
     let EstimateFee (numBlocksTarget: int) (stratumServer: Async<StratumClient>): Async<decimal> = async {
         let! stratumClient = stratumServer
         let! estimateFeeResult = stratumClient.BlockchainEstimateFee numBlocksTarget
